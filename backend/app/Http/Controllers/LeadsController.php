@@ -125,4 +125,33 @@ class LeadsController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Atualizar estado do lead (para Kanban drag-and-drop)
+     * PATCH /api/leads/{id}/state
+     */
+    public function updateState(Request $request, $id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            
+            $this->validate($request, [
+                'state' => 'required|string|max:2'
+            ]);
+            
+            $lead->state = $request->state;
+            $lead->save();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado atualizado com sucesso',
+                'data' => $lead
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

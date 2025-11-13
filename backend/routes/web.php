@@ -184,6 +184,7 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('/leads/stats', 'LeadsController@stats');
     $router->get('/leads/{id}', 'LeadsController@show');
     $router->put('/leads/{id}', 'LeadsController@update');
+    $router->patch('/leads/{id}/state', 'LeadsController@updateState');
     
     // Conversas
     $router->get('/conversas', 'ConversasController@index');
