@@ -1,0 +1,33 @@
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Arquivos temporários
+*.log
+*.cache
+*.tmp
+
+# Backend logs
+backend/storage/logs/*
+!backend/storage/logs/.gitignore
+
+# Diretórios de sistema antigos
+old/
+temp/
+uploads/whatsapp_audios/
+imobi/
+
+# Environment files
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
