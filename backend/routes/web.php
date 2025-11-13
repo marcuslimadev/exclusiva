@@ -20,11 +20,17 @@ $router->get('/', function () use ($router) {
 // Database test
 $router->get('/db-test', function () {
     try {
+        // Debug: mostrar configuração
+        $config = config('database.connections.pgsql');
+        
         $pdo = app('db')->connection()->getPdo();
         $result = app('db')->select('SELECT COUNT(*) as count FROM users');
         return response()->json([
             'database' => 'connected',
-            'users_count' => $result[0]->count
+            'users_count' => $result[0]->count,
+            'debug_host' => $config['host'] ?? 'N/A',
+            'debug_database' => $config['database'] ?? 'N/A',
+            'has_database_url' => !empty(env('DATABASE_URL'))
         ]);
     } catch (\Exception $e) {
         return response()->json([
