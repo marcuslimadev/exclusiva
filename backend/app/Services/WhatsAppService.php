@@ -77,9 +77,14 @@ class WhatsAppService
             
             // 1. Obter ou criar conversa
             $conversaData = [
-                'profile_name' => $profileName
+                'profile_name' => $profileName,
+                'city' => $city,
+                'state' => $state,
+                'country' => $country,
+                'latitude' => $latitude,
+                'longitude' => $longitude
             ];
-            $conversa = $this->getOrCreateConversa($telefone, $conversaData);
+            $conversa = $this->getOrCreateConversa($telefone, ['profile_name' => $profileName]);
             
             // 2. Registrar mensagem recebida
             $messageType = $this->detectMessageType($mediaUrl, $mediaType);
@@ -97,12 +102,19 @@ class WhatsAppService
                 $body = $this->transcribeAudio($mediaUrl, $conversa->id, $mensagem->id);
             }
             
-            // 4. Verificar se é primeira mensagem (boas-vindas)
+            // 4. Garantir que lead existe (criar se não existir)
+            if (!$conversa->lead_id) {
+                $lead = $this->createLead($telefone, $conversaData, $conversa->id);
+                $conversa->update(['lead_id' => $lead->id]);
+                Log::info('Lead criado e vinculado à conversa', ['lead_id' => $lead->id, 'conversa_id' => $conversa->id]);
+            }
+            
+            // 5. Verificar se é primeira mensagem (boas-vindas)
             if ($conversa->mensagens()->count() === 1) {
                 return $this->handleFirstMessage($conversa, $telefone, $conversaData);
             }
             
-            // 5. Processar com IA e responder
+            // 6. Processar com IA e responder
             return $this->handleRegularMessage($conversa, $body);
             
         } catch (\Exception $e) {
