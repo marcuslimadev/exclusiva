@@ -17,6 +17,23 @@ $router->get('/', function () use ($router) {
     ]);
 });
 
+// Database test
+$router->get('/db-test', function () {
+    try {
+        $pdo = app('db')->connection()->getPdo();
+        $result = app('db')->select('SELECT COUNT(*) as count FROM users');
+        return response()->json([
+            'database' => 'connected',
+            'users_count' => $result[0]->count
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'database' => 'error',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+});
+
 // ===========================
 // Webhooks (sem autenticação)
 // ===========================
