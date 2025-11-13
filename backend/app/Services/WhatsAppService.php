@@ -65,7 +65,10 @@ class WhatsAppService
                 'nome' => $profileName,
                 'origem' => $source,
                 'localizacao' => $city && $state ? "$city, $state" : ($city ?? $state ?? 'N/A'),
-                'tem_midia' => $mediaUrl ? 'Sim' : 'Não'
+                'tem_midia' => $mediaUrl ? 'Sim' : 'Não',
+                'tipo_midia' => $mediaType ?? 'N/A',
+                'url_midia' => $mediaUrl ?? 'N/A',
+                'corpo_mensagem' => substr($body, 0, 100)
             ]);
             
             if (!$from) {
@@ -99,6 +102,11 @@ class WhatsAppService
             
             // 3. Processar áudio se necessário
             if ($messageType === 'audio' && $mediaUrl) {
+                Log::info('🎤 Áudio detectado, iniciando processamento', [
+                    'media_url' => $mediaUrl,
+                    'media_type' => $mediaType
+                ]);
+                
                 // Enviar feedback imediato
                 $feedbackMsg = "🎤 Recebi seu áudio! Vou ouvir agora e já te respondo... ⏳";
                 $this->twilio->sendMessage($telefone, $feedbackMsg);
@@ -112,12 +120,38 @@ class WhatsAppService
                 ]);
                 
                 // Transcrever áudio
-                $body = $this->transcribeAudio($mediaUrl, $conversa->id, $mensagem->id);
+                $transcriptionResult = $this->transcribeAudio($mediaUrl, $conversa->id, $mensagem->id);
                 
-                Log::info('🎤 Áudio transcrito', [
+                Log::info('🎤 Resultado da transcrição', [
                     'conversa_id' => $conversa->id,
-                    'transcricao' => $body
+                    'resultado' => $transcriptionResult,
+                    'tipo' => gettype($transcriptionResult),
+                    'vazio' => empty($transcriptionResult)
                 ]);
+                
+                // Se a transcrição falhou, retornar erro específico
+                if (empty($transcriptionResult) || strpos($transcriptionResult, '[') === 0) {
+                    Log::error('❌ Transcrição falhou ou retornou mensagem de erro', [
+                        'resultado' => $transcriptionResult
+                    ]);
+                    
+                    // Enviar mensagem de erro ao usuário
+                    $errorMsg = "Desculpe, tive dificuldade em ouvir seu áudio. Pode tentar novamente ou digitar sua mensagem? 😊";
+                    $this->twilio->sendMessage($telefone, $errorMsg);
+                    $this->saveMensagem($conversa->id, [
+                        'direction' => 'outgoing',
+                        'message_type' => 'text',
+                        'content' => $errorMsg,
+                        'status' => 'sent'
+                    ]);
+                    
+                    return [
+                        'success' => false,
+                        'error' => 'Falha na transcrição de áudio'
+                    ];
+                }
+                
+                $body = $transcriptionResult;
             }
             
             // 4. Garantir que lead existe (criar se não existir)
@@ -362,16 +396,34 @@ class WhatsAppService
     private function transcribeAudio($mediaUrl, $conversaId, $mensagemId)
     {
         try {
+            Log::info('🎤 Iniciando transcrição de áudio', [
+                'media_url' => $mediaUrl,
+                'conversa_id' => $conversaId,
+                'mensagem_id' => $mensagemId
+            ]);
+            
             // Baixar áudio
             $audioData = $this->twilio->downloadMedia($mediaUrl);
             
             if (!$audioData['success']) {
+                Log::error('❌ Falha ao baixar áudio', ['error' => $audioData['error'] ?? 'Unknown']);
                 return '[Áudio não pôde ser processado]';
             }
             
+            Log::info('✅ Áudio baixado', ['size' => strlen($audioData['data']) . ' bytes']);
+            
+            // Criar diretório se não existir
+            $tempDir = storage_path('app/temp');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+                Log::info('📁 Diretório temp criado', ['path' => $tempDir]);
+            }
+            
             // Salvar temporariamente
-            $audioPath = storage_path('app/temp/audio_' . time() . '.ogg');
+            $audioPath = $tempDir . '/audio_' . time() . '_' . uniqid() . '.ogg';
             file_put_contents($audioPath, $audioData['data']);
+            
+            Log::info('💾 Áudio salvo temporariamente', ['path' => $audioPath]);
             
             // Transcrever
             $transcription = $this->openai->transcribeAudio($audioPath);
@@ -380,6 +432,11 @@ class WhatsAppService
             @unlink($audioPath);
             
             if ($transcription['success']) {
+                Log::info('✅ Transcrição bem-sucedida', [
+                    'text' => $transcription['text'],
+                    'length' => strlen($transcription['text'])
+                ]);
+                
                 // Atualizar mensagem com transcrição
                 Mensagem::where('id', $mensagemId)->update([
                     'transcription' => $transcription['text']
@@ -388,10 +445,14 @@ class WhatsAppService
                 return $transcription['text'];
             }
             
+            Log::error('❌ Falha na transcrição', ['details' => $transcription]);
             return '[Não foi possível transcrever o áudio]';
             
         } catch (\Exception $e) {
-            Log::error('Erro ao transcrever áudio', ['error' => $e->getMessage()]);
+            Log::error('❌ Erro ao transcrever áudio', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return '[Erro ao processar áudio]';
         }
     }
