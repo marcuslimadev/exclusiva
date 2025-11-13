@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: exclusiva-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: APP_NAME
+        value: Exclusiva-CRM
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        fromDatabase:
+          name: exclusiva-mysql
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: exclusiva-mysql
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: exclusiva-mysql
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: exclusiva-mysql
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: exclusiva-mysql
+          property: password
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+databases:
+  - name: exclusiva-mysql
+    databaseName: crm_exclusiva
+    user: exclusiva_user

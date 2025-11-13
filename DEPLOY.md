@@ -1,37 +1,45 @@
 # 🚀 Guia de Deploy - CRM Exclusiva
 
-## 📦 Backend - Railway.app
+## 📦 Backend - Render.com
 
-### 1. Criar conta no Railway
-- Acesse: https://railway.app/
+### 1. Criar conta no Render
+- Acesse: https://render.com/
 - Faça login com GitHub
 
-### 2. Criar novo projeto
+### 2. Criar Web Service
 ```bash
-1. Click "New Project"
-2. Escolha "Deploy from GitHub repo"
-3. Selecione: marcuslimadev/exclusiva
-4. Railway detectará automaticamente o PHP
+1. Click "New +" → "Web Service"
+2. Connect ao GitHub: marcuslimadev/exclusiva
+3. Configure:
+   - Name: exclusiva-backend
+   - Environment: Docker
+   - Branch: main
+   - Root Directory: backend
 ```
 
-### 3. Configurar variáveis de ambiente
-No dashboard do Railway, vá em "Variables" e adicione:
+### 3. Criar MySQL Database
+```bash
+1. No dashboard Render, click "New +" → "PostgreSQL"
+   (Render não tem MySQL free, use PostgreSQL)
+2. Name: exclusiva-db
+3. Database: crm_exclusiva
+4. User: exclusiva_user
+5. Aguarde provisionar
+6. Copie a "Internal Database URL"
+```
+
+### 4. Configurar variáveis de ambiente
+No Web Service criado, vá em "Environment" e adicione:
 
 ```env
 # App
 APP_NAME=Exclusiva-CRM
 APP_ENV=production
-APP_KEY=base64:SUA_KEY_AQUI
 APP_DEBUG=false
-APP_URL=https://seu-app.railway.app
+APP_URL=https://seu-app.onrender.com
 
-# Database (Railway MySQL)
-DB_CONNECTION=mysql
-DB_HOST=${{MYSQLHOST}}
-DB_PORT=${{MYSQLPORT}}
-DB_DATABASE=${{MYSQLDATABASE}}
-DB_USERNAME=${{MYSQLUSER}}
-DB_PASSWORD=${{MYSQLPASSWORD}}
+# Database (copie da Internal Database URL)
+DATABASE_URL=postgresql://user:pass@host:5432/crm_exclusiva
 
 # Twilio
 TWILIO_ACCOUNT_SID=seu_account_sid
@@ -42,33 +50,31 @@ TWILIO_WHATSAPP_NUMBER=+5531XXXXXXXX
 OPENAI_API_KEY=sk-proj-xxxxx
 ```
 
-### 4. Adicionar MySQL
-```bash
-1. No projeto Railway, click "New Service"
-2. Selecione "Database" → "MySQL"
-3. Railway criará automaticamente as variáveis ${{MYSQL*}}
-```
-
 ### 5. Importar banco de dados
 ```bash
-# Conecte via Railway CLI ou MySQL Workbench
-mysql -h RAILWAY_HOST -P RAILWAY_PORT -u RAILWAY_USER -p RAILWAY_DATABASE < database/schema.sql
+# Conecte via psql ou DBeaver
+psql $DATABASE_URL < database/schema_postgres.sql
+
+# Ou via Render dashboard:
+1. Vá no PostgreSQL criado
+2. Click "Connect" → "External Connection"
+3. Use credenciais no MySQL Workbench/DBeaver
 ```
 
 ### 6. Deploy
 ```bash
-# Railway fará deploy automático ao detectar push no GitHub
+# Render fará deploy automático ao detectar push no GitHub
 git push origin main
 
-# Ou use Railway CLI:
-railway up
+# O Dockerfile será usado automaticamente
 ```
 
-### 7. Configurar domínio
+### 7. Verificar deploy
 ```bash
-1. No Railway, vá em "Settings" → "Networking"
-2. Click "Generate Domain"
-3. Anote a URL: https://seu-app.railway.app
+1. No Render dashboard, vá no Web Service
+2. Click em "Logs" para ver o build
+3. Aguarde "Live" aparecer
+4. Anote a URL: https://seu-app.onrender.com
 ```
 
 ---
@@ -103,6 +109,12 @@ Edite `frontend/src/services/api.js`:
 const API_URL = import.meta.env.VITE_API_URL || 'https://seu-backend.railway.app';
 ```
 
+### 4. Atualizar variável de ambiente
+No Vercel, adicione:
+```env
+VITE_API_URL=https://seu-backend.onrender.com
+```
+
 ### 5. Deploy
 ```bash
 # Vercel fará deploy automático ao detectar push
@@ -128,7 +140,7 @@ O arquivo `backend/app/Http/Middleware/CorsMiddleware.php` já está configurado
 
 ### 2. Atualizar .env do frontend
 ```env
-VITE_API_URL=https://seu-backend.railway.app
+VITE_API_URL=https://seu-backend.onrender.com
 ```
 
 ### 3. Rebuild do frontend
@@ -136,7 +148,7 @@ VITE_API_URL=https://seu-backend.railway.app
 cd frontend
 npm run build
 git add .
-git commit -m "chore: Atualiza API URL para Railway"
+git commit -m "chore: Atualiza API URL para Render"
 git push origin main
 ```
 
@@ -144,9 +156,9 @@ git push origin main
 
 ## 📱 Configurar Webhook do Twilio
 
-### 1. Obter URL do Railway
+### 1. Obter URL do Render
 ```
-https://seu-backend.railway.app/webhook/whatsapp
+https://seu-backend.onrender.com/webhook/whatsapp
 ```
 
 ### 2. Configurar no Twilio
@@ -154,7 +166,7 @@ https://seu-backend.railway.app/webhook/whatsapp
 1. Acesse: https://console.twilio.com/
 2. Vá em: Messaging → Settings → WhatsApp Sandbox
 3. Configure webhook:
-   - URL: https://seu-backend.railway.app/webhook/whatsapp
+   - URL: https://seu-backend.onrender.com/webhook/whatsapp
    - Method: HTTP POST
 4. Salve
 ```
@@ -166,12 +178,12 @@ Envie uma mensagem WhatsApp para o número configurado e verifique os logs no Ra
 
 ## 🔍 Monitoramento
 
-### Railway (Backend)
+### Render (Backend)
 ```bash
-1. Acesse o projeto no Railway
-2. Vá em "Deployments"
-3. Click no deploy ativo
-4. Veja logs em tempo real
+1. Acesse o Web Service no Render
+2. Click em "Logs"
+3. Veja logs em tempo real
+4. Métricas em "Metrics"
 ```
 
 ### Vercel (Frontend)
@@ -188,53 +200,79 @@ Envie uma mensagem WhatsApp para o número configurado e verifique os logs no Ra
 
 ### Backend não inicia
 ```bash
-# Verifique logs no Railway
-railway logs
+# Verifique logs no Render dashboard
+# Vá em: Web Service → Logs
 
-# Teste localmente
-php -S localhost:8000 -t public
+# Teste Docker localmente:
+cd backend
+docker build -t exclusiva-backend .
+docker run -p 8080:8080 exclusiva-backend
 ```
 
 ### Frontend não conecta ao backend
 ```bash
 # Verifique CORS
-curl -I https://seu-backend.railway.app/webhook/whatsapp
+curl -I https://seu-backend.onrender.com/webhook/whatsapp
 
 # Teste API
-curl https://seu-backend.railway.app/dashboard
+curl https://seu-backend.onrender.com/dashboard
 ```
 
 ### Webhook não responde
 ```bash
 # Verifique logs do Twilio
-# Verifique logs do Railway
+# Verifique logs do Render
 # Teste webhook manualmente:
-curl -X POST https://seu-backend.railway.app/webhook/whatsapp \
+curl -X POST https://seu-backend.onrender.com/webhook/whatsapp \
   -d "From=whatsapp:+5531999999999" \
   -d "Body=teste"
+
+# ⚠️ Render free tier hiberna após 15min de inatividade
+# Primeira chamada pode demorar 30s para "acordar"
 ```
 
 ---
 
 ## ✅ Checklist Final
 
-- [ ] Backend no Railway funcionando
-- [ ] MySQL no Railway criado e importado
-- [ ] Variáveis de ambiente configuradas no Railway
+- [ ] Backend no Render funcionando
+- [ ] PostgreSQL no Render criado e importado
+- [ ] Variáveis de ambiente configuradas no Render
 - [ ] Frontend no Vercel funcionando
 - [ ] VITE_API_URL configurado no Vercel
 - [ ] Webhook do Twilio configurado
 - [ ] Teste de mensagem WhatsApp realizado
-- [ ] Logs verificados (Railway + Vercel)
+- [ ] Logs verificados (Render + Vercel)
 - [ ] Domínio customizado configurado (opcional)
+
+## ⚠️ Limitações Render Free Tier
+
+- **Sleep após 15min**: Primeira chamada demora ~30s
+- **750h/mês**: ~31 dias se ficar sempre ativo
+- **PostgreSQL**: 90 dias de retenção
+- **Solução**: Usar cron job para manter ativo (ex: UptimeRobot)
 
 ---
 
 ## 🎉 Deploy Completo!
 
 **URLs Finais:**
-- Backend: https://seu-backend.railway.app
+- Backend: https://seu-backend.onrender.com
 - Frontend: https://seu-frontend.vercel.app
-- Webhook: https://seu-backend.railway.app/webhook/whatsapp
+- Webhook: https://seu-backend.onrender.com/webhook/whatsapp
 
 🚀 **Sistema no ar!**
+
+## 🔄 Manter Backend Ativo (Opcional)
+
+Para evitar hibernação do Render:
+
+1. **UptimeRobot** (gratuito):
+   - Crie conta: https://uptimerobot.com/
+   - Adicione monitor HTTP(S)
+   - URL: https://seu-backend.onrender.com/
+   - Intervalo: 5 minutos
+
+2. **Cron-Job.org** (alternativa):
+   - Acesse: https://cron-job.org/
+   - Configure job para chamar sua URL a cada 5min
