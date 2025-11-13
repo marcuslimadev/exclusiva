@@ -115,7 +115,7 @@ class WhatsAppService
     }
     
     /**
-     * Obter ou criar conversa
+     * Obter ou criar conversa com dados geográficos
      */
     private function getOrCreateConversa($telefone, $dados)
     {
@@ -127,18 +127,34 @@ class WhatsAppService
             $conversa = Conversa::create([
                 'telefone' => $telefone,
                 'whatsapp_name' => $dados['profile_name'],
+                'wa_id' => $dados['wa_id'],
+                'city' => $dados['city'],
+                'state' => $dados['state'],
+                'country' => $dados['country'],
                 'status' => 'ativa',
                 'stage' => 'boas_vindas', // Stage inicial correto
                 'iniciada_em' => Carbon::now()
             ]);
             
-            Log::info('Nova conversa criada', [
+            Log::info('Nova conversa criada com dados geográficos', [
                 'id' => $conversa->id,
                 'telefone' => $telefone,
                 'whatsapp_name' => $dados['profile_name'],
+                'wa_id' => $dados['wa_id'],
                 'city' => $dados['city'],
                 'state' => $dados['state']
             ]);
+        } else {
+            // Atualizar dados geográficos se não existirem
+            $updates = [];
+            if (!$conversa->wa_id && $dados['wa_id']) $updates['wa_id'] = $dados['wa_id'];
+            if (!$conversa->city && $dados['city']) $updates['city'] = $dados['city'];
+            if (!$conversa->state && $dados['state']) $updates['state'] = $dados['state'];
+            
+            if (!empty($updates)) {
+                $conversa->update($updates);
+                Log::info('Conversa atualizada com novos dados geográficos', $updates);
+            }
         }
         
         return $conversa;
@@ -178,7 +194,7 @@ class WhatsAppService
     }
     
     /**
-     * Processar mensagem regular
+     * Processar mensagem regular com progressão inteligente de stages
      */
     private function handleRegularMessage($conversa, $message)
     {
@@ -195,17 +211,96 @@ class WhatsAppService
             // Tentar extrair dados do lead
             $this->extractAndUpdateLeadData($conversa);
             
+            // Recarregar lead com dados atualizados
+            $conversa->load('lead');
+            
+            // INTELIGÊNCIA: Decidir próximo stage baseado em dados
+            $this->progressStage($conversa);
+            
             // Verificar se já tem dados suficientes para matching
             if ($conversa->lead && $this->hasEnoughDataForMatching($conversa->lead)) {
+                // Transição automática: coleta_dados → matching → apresentacao
                 $this->performPropertyMatching($conversa->lead, $conversa);
+                $conversa->update(['stage' => 'apresentacao']);
             }
         }
         
         return [
             'success' => true,
             'message' => 'Mensagem processada',
-            'ai_response' => $aiResponse['content'] ?? null
+            'ai_response' => $aiResponse['content'] ?? null,
+            'current_stage' => $conversa->stage
         ];
+    }
+    
+    /**
+     * Progressão inteligente de stages baseada em contexto
+     */
+    private function progressStage($conversa)
+    {
+        if (!$conversa->lead) return;
+        
+        $lead = $conversa->lead;
+        $currentStage = $conversa->stage;
+        
+        // Regras de transição automática
+        switch ($currentStage) {
+            case 'coleta_dados':
+                // Se já tem orçamento OU localização OU quartos, progride para matching
+                if ($lead->budget_min || $lead->budget_max || $lead->localizacao || $lead->quartos) {
+                    Log::info('Stage progress: coleta_dados → matching', [
+                        'conversa_id' => $conversa->id,
+                        'lead_id' => $lead->id,
+                        'reason' => 'Dados suficientes coletados'
+                    ]);
+                    // Não muda ainda - aguarda matching retornar resultados
+                } else {
+                    // Ainda coletando dados
+                    $conversa->update(['stage' => 'aguardando_info']);
+                }
+                break;
+                
+            case 'apresentacao':
+                // Se cliente pergunta sobre imóvel específico ou demonstra interesse
+                // (detectado pela IA no contexto)
+                $contexto = strtolower($conversa->contexto_conversa ?? '');
+                if (strpos($contexto, 'interesse') !== false || 
+                    strpos($contexto, 'visita') !== false ||
+                    strpos($contexto, 'ver') !== false) {
+                    $conversa->update(['stage' => 'interesse']);
+                    Log::info('Stage progress: apresentacao → interesse', [
+                        'conversa_id' => $conversa->id,
+                        'reason' => 'Cliente demonstrou interesse'
+                    ]);
+                }
+                break;
+                
+            case 'interesse':
+                // Se cliente solicita agendamento explicitamente
+                $ultimaMensagem = strtolower($conversa->ultima_mensagem ?? '');
+                if (strpos($ultimaMensagem, 'agendar') !== false || 
+                    strpos($ultimaMensagem, 'visitar') !== false ||
+                    strpos($ultimaMensagem, 'ver o imovel') !== false ||
+                    strpos($ultimaMensagem, 'quando posso') !== false) {
+                    $conversa->update(['stage' => 'agendamento']);
+                    $lead->update(['status' => 'qualificado']);
+                    Log::info('Stage progress: interesse → agendamento', [
+                        'conversa_id' => $conversa->id,
+                        'reason' => 'Cliente solicitou agendamento'
+                    ]);
+                }
+                break;
+                
+            case 'sem_match':
+                // Se cliente aceita refinar critérios
+                $conversa->update(['stage' => 'refinamento']);
+                break;
+                
+            case 'refinamento':
+                // Volta para coleta_dados com critérios ajustados
+                $conversa->update(['stage' => 'coleta_dados']);
+                break;
+        }
     }
     
     /**
@@ -277,7 +372,7 @@ class WhatsAppService
     }
     
     /**
-     * Fazer matching de imóveis
+     * Fazer matching de imóveis com tratamento inteligente
      */
     private function performPropertyMatching($lead, $conversa)
     {
@@ -294,6 +389,7 @@ class WhatsAppService
             ->get();
         
         if ($properties->count() > 0) {
+            // ENCONTROU IMÓVEIS!
             foreach ($properties as $property) {
                 LeadPropertyMatch::create([
                     'lead_id' => $lead->id,
@@ -309,9 +405,35 @@ class WhatsAppService
             
             $this->sendMessage($conversa->id, $conversa->telefone, $mensagem);
             
-            Log::info('Matching realizado', [
+            // Atualizar stage para apresentacao
+            $conversa->update(['stage' => 'apresentacao']);
+            
+            Log::info('Matching realizado - Imóveis encontrados', [
                 'lead_id' => $lead->id,
-                'properties_found' => $properties->count()
+                'properties_found' => $properties->count(),
+                'stage' => 'apresentacao'
+            ]);
+        } else {
+            // NENHUM IMÓVEL ENCONTRADO
+            $mensagem = "😔 No momento não tenho imóveis disponíveis que se encaixem exatamente no que você procura.\n\n";
+            $mensagem .= "Mas não desanima! Posso fazer algumas coisas por você:\n\n";
+            $mensagem .= "1️⃣ Podemos ajustar um pouco o orçamento ou a região?\n";
+            $mensagem .= "2️⃣ Cadastro seu interesse e te aviso assim que chegar algo perfeito!\n";
+            $mensagem .= "3️⃣ Posso te mostrar opções bem próximas do que você quer?\n\n";
+            $mensagem .= "O que você prefere? 😊";
+            
+            $this->sendMessage($conversa->id, $conversa->telefone, $mensagem);
+            
+            // Atualizar stage para sem_match
+            $conversa->update(['stage' => 'sem_match']);
+            
+            Log::info('Matching realizado - Nenhum imóvel encontrado', [
+                'lead_id' => $lead->id,
+                'budget_min' => $lead->budget_min,
+                'budget_max' => $lead->budget_max,
+                'localizacao' => $lead->localizacao,
+                'quartos' => $lead->quartos,
+                'stage' => 'sem_match'
             ]);
         }
     }
@@ -366,7 +488,7 @@ class WhatsAppService
     }
     
     /**
-     * Criar lead com dados completos do WhatsApp
+     * Criar lead com dados completos do WhatsApp incluindo geolocalização
      */
     private function createLead($telefone, $dados, $conversaId)
     {
@@ -380,24 +502,48 @@ class WhatsAppService
             $localizacao = $dados['state'];
         }
         
+        $leadData = [
+            'nome' => $dados['profile_name'], // Já pega o nome de imediato!
+            'whatsapp_name' => $dados['profile_name'],
+            'city' => $dados['city'],
+            'state' => $dados['state'],
+            'country' => $dados['country'],
+            'latitude' => $dados['latitude'],
+            'longitude' => $dados['longitude'],
+            'localizacao' => $localizacao, // Localização textual automática
+            'status' => 'novo',
+            'origem' => 'whatsapp',
+            'primeira_interacao' => Carbon::now(),
+            'ultima_interacao' => Carbon::now()
+        ];
+        
         $lead = Lead::firstOrCreate(
             ['telefone' => $telefone],
-            [
-                'nome' => $dados['profile_name'], // Já pega o nome de imediato!
-                'whatsapp_name' => $dados['profile_name'],
-                'localizacao' => $localizacao, // Localização automática se disponível
-                'status' => 'novo',
-                'origem' => 'whatsapp',
-                'primeira_interacao' => Carbon::now(),
-                'ultima_interacao' => Carbon::now()
-            ]
+            $leadData
         );
         
-        Log::info('Lead criado/atualizado com dados do WhatsApp', [
+        // Se o lead já existia, atualizar dados geográficos se não tiver
+        if (!$lead->wasRecentlyCreated) {
+            $updates = [];
+            if (!$lead->nome && $dados['profile_name']) $updates['nome'] = $dados['profile_name'];
+            if (!$lead->city && $dados['city']) $updates['city'] = $dados['city'];
+            if (!$lead->state && $dados['state']) $updates['state'] = $dados['state'];
+            if (!$lead->latitude && $dados['latitude']) $updates['latitude'] = $dados['latitude'];
+            if (!$lead->longitude && $dados['longitude']) $updates['longitude'] = $dados['longitude'];
+            
+            if (!empty($updates)) {
+                $lead->update($updates);
+            }
+        }
+        
+        Log::info('Lead criado/atualizado com dados geográficos do WhatsApp', [
             'lead_id' => $lead->id,
             'nome' => $dados['profile_name'],
             'telefone' => $telefone,
-            'localizacao' => $localizacao
+            'city' => $dados['city'],
+            'state' => $dados['state'],
+            'coordinates' => $dados['latitude'] && $dados['longitude'] ? 
+                "{$dados['latitude']}, {$dados['longitude']}" : null
         ]);
         
         return $lead;
