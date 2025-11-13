@@ -171,4 +171,34 @@ class LeadsController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Atualizar status do funil do lead (para Kanban drag-and-drop)
+     * PATCH /api/leads/{id}/status
+     */
+    public function updateStatus(Request $request, $id)
+    {
+        try {
+            $lead = Lead::findOrFail($id);
+            
+            $this->validate($request, [
+                'status' => 'required|in:novo,em_atendimento,qualificado,proposta,fechado,perdido'
+            ]);
+            
+            $lead->status = $request->status;
+            $lead->updated_at = now();
+            $lead->save();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Status do funil atualizado com sucesso',
+                'data' => $lead
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

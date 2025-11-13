@@ -77,6 +77,27 @@ export const useLeadsStore = defineStore('leads', {
         console.error('❌ Erro ao atualizar estado do lead:', error)
         throw error
       }
+    },
+
+    async updateLeadStatus(id, newStatus) {
+      try {
+        const response = await api.patch(`/api/leads/${id}/status`, {
+          status: newStatus
+        })
+        
+        const leadAtualizado = response.data.data || response.data
+        
+        // Atualizar na lista local
+        const index = this.leads.findIndex(l => l.id === id)
+        if (index !== -1) {
+          this.leads[index] = { ...this.leads[index], status: newStatus }
+        }
+        
+        return true
+      } catch (error) {
+        console.error('❌ Erro ao atualizar status do funil:', error)
+        throw error
+      }
     }
   }
 })

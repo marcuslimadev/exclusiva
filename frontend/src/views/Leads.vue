@@ -5,23 +5,12 @@
     <div class="px-4 sm:px-6 lg:px-8 py-8">
       <div class="mb-6 flex items-center justify-between">
         <div>
-          <h1 class="text-3xl font-bold text-gray-900">📍 Leads por Estado</h1>
-          <p class="text-gray-600 mt-1">Board Kanban - Arraste os cards entre estados</p>
+          <h1 class="text-3xl font-bold text-gray-900">🎯 Funil de Vendas</h1>
+          <p class="text-gray-600 mt-1">Kanban Board - Arraste os cards entre as etapas do funil</p>
         </div>
         
         <!-- Filtros -->
         <div class="flex items-center space-x-4">
-          <select
-            v-model="filtros.status"
-            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="todos">📊 Todos os Status</option>
-            <option value="novo">🆕 Novo</option>
-            <option value="em_atendimento">⏳ Em Atendimento</option>
-            <option value="qualificado">✅ Qualificado</option>
-            <option value="convertido">🎉 Convertido</option>
-          </select>
-
           <button
             @click="toggleView"
             class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
@@ -46,19 +35,19 @@
       <!-- Kanban Board View -->
       <div v-else-if="viewMode === 'kanban'" class="overflow-x-auto pb-4">
         <div class="flex gap-4 min-w-max">
-          <KanbanColumn
-            v-for="estado in estadosComLeads"
-            :key="estado"
-            :state="estado"
-            :leads="getLeadsByState(estado)"
+          <FunilColumn
+            v-for="statusFunil in statusDoFunil"
+            :key="statusFunil.key"
+            :status="statusFunil"
+            :leads="getLeadsByStatus(statusFunil.key)"
             @dragstart="handleDragStart"
-            @drop="handleDrop($event, estado)"
+            @drop="handleDrop($event, statusFunil.key)"
             @view="verDetalhes"
             @edit="editarLead"
           />
           
           <!-- Empty State -->
-          <div v-if="estadosComLeads.length === 0" class="w-full text-center py-12">
+          <div v-if="leads.length === 0" class="w-full text-center py-12">
             <svg class="w-24 h-24 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
@@ -80,13 +69,10 @@
                 Telefone
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Estado
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Orçamento
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                Status Funil
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Ações
@@ -94,7 +80,7 @@
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="lead in leadsFiltrados" :key="lead.id" class="hover:bg-gray-50">
+            <tr v-for="lead in leads" :key="lead.id" class="hover:bg-gray-50">
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm font-medium text-gray-900">{{ lead.nome || 'Sem nome' }}</div>
               </td>
@@ -114,7 +100,7 @@
                   class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
                   :class="getStatusClass(lead.status)"
                 >
-                  {{ lead.status }}
+                  {{ formatStatus(lead.status) }}
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -135,7 +121,7 @@
           </tbody>
         </table>
 
-        <div v-if="!loading && leadsFiltrados.length === 0" class="text-center py-8 text-gray-500">
+        <div v-if="!loading && leads.length === 0" class="text-center py-8 text-gray-500">
           Nenhum lead encontrado
         </div>
       </div>
@@ -162,15 +148,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useLeadsStore } from '../stores/leads'
 import Navbar from '../components/Navbar.vue'
-import KanbanColumn from '../components/KanbanColumn.vue'
+import FunilColumn from '../components/FunilColumn.vue'
 import LeadDetailsModal from '../components/LeadDetailsModal.vue'
 import LeadEditModal from '../components/LeadEditModal.vue'
 
 const leadsStore = useLeadsStore()
 
-const leadsFiltrados = computed(() => leadsStore.leadsFiltrados)
+const leads = computed(() => leadsStore.leads)
 const loading = computed(() => leadsStore.loading)
-const filtros = computed(() => leadsStore.filtros)
 
 const viewMode = ref('kanban') // 'kanban' ou 'table'
 const draggedLead = ref(null)
@@ -181,29 +166,23 @@ const showEditModal = ref(false)
 const selectedLeadId = ref(null)
 const selectedLead = ref(null)
 
+// Status do Funil de Vendas (ordem correta do processo)
+const statusDoFunil = [
+  { key: 'novo', label: 'Novo Lead', icon: '🆕', color: 'blue' },
+  { key: 'em_atendimento', label: 'Em Atendimento', icon: '💬', color: 'yellow' },
+  { key: 'qualificado', label: 'Qualificado', icon: '✅', color: 'green' },
+  { key: 'proposta', label: 'Proposta', icon: '📋', color: 'purple' },
+  { key: 'fechado', label: 'Fechado', icon: '🎉', color: 'emerald' },
+  { key: 'perdido', label: 'Perdido', icon: '❌', color: 'red' }
+]
+
 onMounted(() => {
   leadsStore.fetchLeads()
 })
 
-// Agrupar leads por estado
-const estadosComLeads = computed(() => {
-  // Pegar estados únicos (incluindo null/undefined)
-  const todosEstados = leadsFiltrados.value.map(lead => lead.state || 'SEM_ESTADO')
-  const estadosUnicos = [...new Set(todosEstados)]
-  
-  // Ordenar: estados com sigla primeiro (alfabético), depois "SEM_ESTADO"
-  return estadosUnicos.sort((a, b) => {
-    if (a === 'SEM_ESTADO') return 1
-    if (b === 'SEM_ESTADO') return -1
-    return a.localeCompare(b)
-  })
-})
-
-const getLeadsByState = (state) => {
-  if (state === 'SEM_ESTADO') {
-    return leadsFiltrados.value.filter(lead => !lead.state)
-  }
-  return leadsFiltrados.value.filter(lead => lead.state === state)
+// Agrupar leads por status do funil
+const getLeadsByStatus = (status) => {
+  return leads.value.filter(lead => lead.status === status)
 }
 
 // Drag and Drop handlers
@@ -211,27 +190,27 @@ const handleDragStart = (lead) => {
   draggedLead.value = lead
 }
 
-const handleDrop = async (event, targetState) => {
+const handleDrop = async (event, targetStatus) => {
   event.preventDefault()
   
   if (!draggedLead.value) return
   
   const leadId = draggedLead.value.id
-  const oldState = draggedLead.value.state
+  const oldStatus = draggedLead.value.status
   
-  if (oldState === targetState) {
+  if (oldStatus === targetStatus) {
     draggedLead.value = null
     return
   }
 
   try {
     // Atualizar no backend
-    await leadsStore.updateLeadState(leadId, targetState)
+    await leadsStore.updateLeadStatus(leadId, targetStatus)
     
     // Recarregar leads para atualizar o board
     await leadsStore.fetchLeads()
     
-    console.log(`✅ Lead movido: ${oldState} → ${targetState}`)
+    console.log(`✅ Lead movido: ${oldStatus} → ${targetStatus}`)
   } catch (error) {
     console.error('❌ Erro ao mover lead:', error)
     alert('Erro ao mover o lead. Tente novamente.')
@@ -256,9 +235,23 @@ const getStatusClass = (status) => {
     'novo': 'bg-blue-100 text-blue-800',
     'em_atendimento': 'bg-yellow-100 text-yellow-800',
     'qualificado': 'bg-green-100 text-green-800',
-    'convertido': 'bg-purple-100 text-purple-800'
+    'proposta': 'bg-purple-100 text-purple-800',
+    'fechado': 'bg-emerald-100 text-emerald-800',
+    'perdido': 'bg-red-100 text-red-800'
   }
   return classes[status] || 'bg-gray-100 text-gray-800'
+}
+
+const formatStatus = (status) => {
+  const labels = {
+    'novo': 'Novo',
+    'em_atendimento': 'Em Atendimento',
+    'qualificado': 'Qualificado',
+    'proposta': 'Proposta',
+    'fechado': 'Fechado',
+    'perdido': 'Perdido'
+  }
+  return labels[status] || status
 }
 
 // Ações
