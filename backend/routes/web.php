@@ -19,12 +19,12 @@ $router->get('/', function () use ($router) {
 
 // Landing Page Pública
 $router->get('/imoveis', function () {
-    $path = base_path('../public/index.html');
+    $path = base_path('public/imoveis.html');
     if (file_exists($path)) {
         return response(file_get_contents($path))
             ->header('Content-Type', 'text/html');
     }
-    return response('Landing page não encontrada', 404);
+    return response('Landing page não encontrada. Path: ' . $path, 404);
 });
 
 // Database test
