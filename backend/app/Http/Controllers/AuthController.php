@@ -34,7 +34,8 @@ class AuthController extends Controller
         }
         
         // Gerar token JWT simples (em produção usar pacote JWT)
-        $token = base64_encode($user->id . '|' . time() . '|' . env('JWT_SECRET'));
+        $secret = env('JWT_SECRET', env('APP_KEY', 'default-secret-key-change-in-production'));
+        $token = base64_encode($user->id . '|' . time() . '|' . $secret);
         
         return response()->json([
             'success' => true,
