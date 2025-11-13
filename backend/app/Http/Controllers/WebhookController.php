@@ -19,30 +19,34 @@ class WebhookController extends Controller
     }
     
     /**
-     * Receber mensagens do Twilio
+     * Receber mensagens do WhatsApp (Twilio ou Evolution API)
      * POST /webhook/whatsapp
      */
     public function receive(Request $request)
     {
         $webhookData = $request->all();
         
+        // Detectar origem do webhook (Twilio ou Evolution API)
+        $source = $this->detectWebhookSource($webhookData);
+        
         Log::info('╔════════════════════════════════════════════════════════════════╗');
-        Log::info('║           🔔 WEBHOOK RECEBIDO DO TWILIO                       ║');
+        Log::info('║           🔔 WEBHOOK RECEBIDO - ' . strtoupper($source) . '                    ║');
         Log::info('╚════════════════════════════════════════════════════════════════╝');
-        Log::info('📱 De: ' . ($webhookData['From'] ?? 'N/A'));
-        Log::info('👤 Nome: ' . ($webhookData['ProfileName'] ?? 'N/A'));
-        Log::info('💬 Mensagem: ' . ($webhookData['Body'] ?? '[mídia]'));
-        Log::info('🆔 MessageSid: ' . ($webhookData['MessageSid'] ?? 'N/A'));
-        Log::info('📍 Cidade: ' . ($webhookData['FromCity'] ?? 'N/A'));
-        Log::info('🗺️  Estado: ' . ($webhookData['FromState'] ?? 'N/A'));
-        Log::info('🌍 País: ' . ($webhookData['FromCountry'] ?? 'N/A'));
-        if (isset($webhookData['Latitude']) && isset($webhookData['Longitude'])) {
-            Log::info('📌 Coordenadas: ' . $webhookData['Latitude'] . ', ' . $webhookData['Longitude']);
-        }
+        
+        // Normalizar dados conforme a origem
+        $normalizedData = $this->normalizeWebhookData($webhookData, $source);
+        
+        Log::info('📱 De: ' . ($normalizedData['from'] ?? 'N/A'));
+        Log::info('👤 Nome: ' . ($normalizedData['profile_name'] ?? 'N/A'));
+        Log::info('💬 Mensagem: ' . ($normalizedData['message'] ?? '[mídia]'));
+        Log::info('🆔 Message ID: ' . ($normalizedData['message_id'] ?? 'N/A'));
+        Log::info('🔖 Origem: ' . $source);
+        Log::info('─────────────────────────────────────────────────────────────────');
+        Log::info('📦 Payload completo:', $webhookData);
         Log::info('─────────────────────────────────────────────────────────────────');
         
         try {
-            $result = $this->whatsappService->processIncomingMessage($webhookData);
+            $result = $this->whatsappService->processIncomingMessage($normalizedData);
             
             Log::info('╔════════════════════════════════════════════════════════════════╗');
             Log::info('║           ✅ WEBHOOK PROCESSADO COM SUCESSO                   ║');
@@ -50,7 +54,6 @@ class WebhookController extends Controller
             Log::info('📊 Resultado:', $result);
             Log::info('═════════════════════════════════════════════════════════════════');
             
-            // Twilio espera resposta 200 OK (pode ser vazio ou TwiML)
             return response()->json([
                 'success' => true,
                 'message' => 'Processado',
@@ -60,7 +63,8 @@ class WebhookController extends Controller
         } catch (\Exception $e) {
             Log::error('ERRO NO WEBHOOK', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'payload' => $webhookData
             ]);
             
             return response()->json([
@@ -68,6 +72,93 @@ class WebhookController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+    
+    /**
+     * Detectar origem do webhook (Twilio ou Evolution API)
+     */
+    private function detectWebhookSource(array $data): string
+    {
+        // Twilio tem campos específicos como MessageSid, AccountSid
+        if (isset($data['MessageSid']) || isset($data['AccountSid'])) {
+            return 'twilio';
+        }
+        
+        // Evolution API tem campos como event, instance, data
+        if (isset($data['event']) || isset($data['instance']) || isset($data['data'])) {
+            return 'evolution';
+        }
+        
+        return 'unknown';
+    }
+    
+    /**
+     * Normalizar dados do webhook para formato padrão
+     */
+    private function normalizeWebhookData(array $data, string $source): array
+    {
+        if ($source === 'twilio') {
+            return [
+                'from' => $data['From'] ?? null,
+                'to' => $data['To'] ?? null,
+                'message' => $data['Body'] ?? null,
+                'message_id' => $data['MessageSid'] ?? null,
+                'profile_name' => $data['ProfileName'] ?? null,
+                'media_url' => $data['MediaUrl0'] ?? null,
+                'media_type' => $data['MediaContentType0'] ?? null,
+                'location' => [
+                    'city' => $data['FromCity'] ?? null,
+                    'state' => $data['FromState'] ?? null,
+                    'country' => $data['FromCountry'] ?? null,
+                    'latitude' => $data['Latitude'] ?? null,
+                    'longitude' => $data['Longitude'] ?? null,
+                ],
+                'source' => 'twilio',
+                'raw' => $data
+            ];
+        }
+        
+        if ($source === 'evolution') {
+            // Evolution API: data.key.remoteJid, data.message.conversation, etc
+            $messageData = $data['data'] ?? [];
+            $key = $messageData['key'] ?? [];
+            $message = $messageData['message'] ?? [];
+            $pushName = $messageData['pushName'] ?? null;
+            
+            // Extrair texto da mensagem (pode estar em conversation, extendedTextMessage, etc)
+            $messageText = $message['conversation'] 
+                ?? $message['extendedTextMessage']['text'] 
+                ?? $message['imageMessage']['caption']
+                ?? $message['videoMessage']['caption']
+                ?? null;
+            
+            return [
+                'from' => 'whatsapp:+' . preg_replace('/[^0-9]/', '', $key['remoteJid'] ?? ''),
+                'to' => null, // Evolution não envia "to" no webhook
+                'message' => $messageText,
+                'message_id' => $key['id'] ?? null,
+                'profile_name' => $pushName,
+                'media_url' => null, // Implementar se necessário
+                'media_type' => null,
+                'location' => null,
+                'source' => 'evolution',
+                'raw' => $data
+            ];
+        }
+        
+        // Formato desconhecido - tentar extrair o que puder
+        return [
+            'from' => $data['from'] ?? $data['From'] ?? null,
+            'to' => $data['to'] ?? $data['To'] ?? null,
+            'message' => $data['message'] ?? $data['Body'] ?? $data['text'] ?? null,
+            'message_id' => $data['id'] ?? $data['MessageSid'] ?? null,
+            'profile_name' => $data['name'] ?? $data['ProfileName'] ?? null,
+            'media_url' => null,
+            'media_type' => null,
+            'location' => null,
+            'source' => 'unknown',
+            'raw' => $data
+        ];
     }
     
     /**

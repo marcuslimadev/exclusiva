@@ -34,34 +34,36 @@ class WhatsAppService
     }
     
     /**
-     * Processar mensagem recebida do webhook Twilio
+     * Processar mensagem recebida do webhook (Twilio ou Evolution API)
      */
     public function processIncomingMessage($webhookData)
     {
         try {
             Log::info('🔄 Extraindo dados do webhook...');
             
-            $from = $webhookData['From'] ?? null;
-            $body = $webhookData['Body'] ?? '';
-            $messageSid = $webhookData['MessageSid'] ?? null;
-            $mediaUrl = $webhookData['MediaUrl0'] ?? null;
-            $mediaType = $webhookData['MediaContentType0'] ?? null;
+            // Dados normalizados pelo WebhookController
+            $from = $webhookData['from'] ?? null;
+            $body = $webhookData['message'] ?? '';
+            $messageSid = $webhookData['message_id'] ?? null;
+            $mediaUrl = $webhookData['media_url'] ?? null;
+            $mediaType = $webhookData['media_type'] ?? null;
             
             // Dados do perfil WhatsApp
-            $profileName = $webhookData['ProfileName'] ?? null;
-            $waId = $webhookData['WaId'] ?? null; // WhatsApp ID
+            $profileName = $webhookData['profile_name'] ?? null;
+            $source = $webhookData['source'] ?? 'unknown';
             
             // Dados de localização (se disponível)
-            $latitude = $webhookData['Latitude'] ?? null;
-            $longitude = $webhookData['Longitude'] ?? null;
-            $city = $webhookData['FromCity'] ?? null;
-            $state = $webhookData['FromState'] ?? null;
-            $country = $webhookData['FromCountry'] ?? null;
+            $location = $webhookData['location'] ?? [];
+            $latitude = $location['latitude'] ?? null;
+            $longitude = $location['longitude'] ?? null;
+            $city = $location['city'] ?? null;
+            $state = $location['state'] ?? null;
+            $country = $location['country'] ?? null;
             
             Log::info('📦 Dados extraídos:', [
                 'telefone' => $from,
                 'nome' => $profileName,
-                'wa_id' => $waId,
+                'origem' => $source,
                 'localizacao' => $city && $state ? "$city, $state" : ($city ?? $state ?? 'N/A'),
                 'tem_midia' => $mediaUrl ? 'Sim' : 'Não'
             ]);
@@ -76,7 +78,7 @@ class WhatsAppService
             // 1. Obter ou criar conversa com dados completos
             $conversaData = [
                 'profile_name' => $profileName,
-                'wa_id' => $waId,
+                'source' => $source,
                 'latitude' => $latitude,
                 'longitude' => $longitude,
                 'city' => $city,
