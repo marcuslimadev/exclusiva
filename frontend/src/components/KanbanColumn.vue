@@ -1,10 +1,15 @@
 <template>
   <div class="flex-shrink-0 w-80">
     <!-- Header da Coluna -->
-    <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-lg p-4 shadow-lg">
+    <div 
+      class="rounded-t-lg p-4 shadow-lg"
+      :class="state === 'SEM_ESTADO' ? 'bg-gradient-to-r from-gray-500 to-gray-600' : 'bg-gradient-to-r from-blue-500 to-blue-600'"
+    >
       <div class="flex items-center justify-between">
         <div>
-          <h3 class="font-bold text-white text-lg">{{ state }}</h3>
+          <h3 class="font-bold text-white text-lg">
+            {{ state === 'SEM_ESTADO' ? '📍 Sem Estado Definido' : state }}
+          </h3>
           <p class="text-blue-100 text-sm">{{ leads.length }} lead{{ leads.length !== 1 ? 's' : '' }}</p>
         </div>
         <span class="bg-white/20 backdrop-blur-sm text-white font-bold text-lg px-3 py-1 rounded-full">

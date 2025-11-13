@@ -164,11 +164,22 @@ onMounted(() => {
 
 // Agrupar leads por estado
 const estadosComLeads = computed(() => {
-  const estados = [...new Set(leadsFiltrados.value.map(lead => lead.state).filter(Boolean))]
-  return estados.sort()
+  // Pegar estados únicos (incluindo null/undefined)
+  const todosEstados = leadsFiltrados.value.map(lead => lead.state || 'SEM_ESTADO')
+  const estadosUnicos = [...new Set(todosEstados)]
+  
+  // Ordenar: estados com sigla primeiro (alfabético), depois "SEM_ESTADO"
+  return estadosUnicos.sort((a, b) => {
+    if (a === 'SEM_ESTADO') return 1
+    if (b === 'SEM_ESTADO') return -1
+    return a.localeCompare(b)
+  })
 })
 
 const getLeadsByState = (state) => {
+  if (state === 'SEM_ESTADO') {
+    return leadsFiltrados.value.filter(lead => !lead.state)
+  }
   return leadsFiltrados.value.filter(lead => lead.state === state)
 }
 
