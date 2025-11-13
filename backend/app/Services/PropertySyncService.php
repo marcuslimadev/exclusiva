@@ -33,61 +33,83 @@ class PropertySyncService
         Log::info('🏠 Iniciando sincronização de imóveis...');
         
         try {
-            // Buscar lista de imóveis
-            $lista = $this->callApi('/lista');
-            
-            if (!isset($lista['resultSet']['data'])) {
-                throw new \Exception('Resposta da API inválida: estrutura esperada não encontrada');
-            }
-            
-            $imoveis = $lista['resultSet']['data'];
             $stats = [
-                'found' => count($imoveis),
+                'found' => 0,
                 'new' => 0,
                 'updated' => 0,
                 'errors' => 0
             ];
             
-            foreach ($imoveis as $item) {
-                $codigo = $item['codigoImovel'] ?? null;
+            $page = 1;
+            $totalPages = 1;
+            
+            // Loop por todas as páginas
+            do {
+                Log::info("📄 Buscando página {$page}...");
                 
-                if (!$codigo) {
-                    $stats['errors']++;
-                    continue;
+                // Buscar lista de imóveis (com paginação)
+                $lista = $this->callApi("/lista?page={$page}");
+                
+                if (!isset($lista['resultSet']['data'])) {
+                    throw new \Exception('Resposta da API inválida: estrutura esperada não encontrada');
                 }
                 
-                try {
-                    // Buscar dados completos do imóvel
-                    $response = $this->callApi("/dados/{$codigo}");
+                $resultSet = $lista['resultSet'];
+                $imoveis = $resultSet['data'];
+                $totalPages = $resultSet['total_pages'] ?? 1;
+                $totalItems = $resultSet['total_items'] ?? 0;
+                
+                Log::info("📊 Página {$page}/{$totalPages} - {count($imoveis)} imóveis", [
+                    'total_items' => $totalItems,
+                    'per_page' => $resultSet['per_page'] ?? 20
+                ]);
+                
+                $stats['found'] += count($imoveis);
+                
+                foreach ($imoveis as $item) {
+                    $codigo = $item['codigoImovel'] ?? null;
                     
-                    if (!isset($response['resultSet'])) {
-                        throw new \Exception("Dados não encontrados para imóvel {$codigo}");
+                    if (!$codigo) {
+                        $stats['errors']++;
+                        continue;
                     }
                     
-                    $imovel = $response['resultSet'];
-                    
-                    // Verificar se já existe
-                    $existing = Property::where('codigo_imovel', $codigo)->first();
-                    
-                    $data = $this->mapPropertyData($imovel);
-                    
-                    if ($existing) {
-                        $existing->update($data);
-                        $stats['updated']++;
-                        Log::debug("✏️ Imóvel {$codigo} atualizado");
-                    } else {
-                        Property::create($data);
-                        $stats['new']++;
-                        Log::debug("➕ Imóvel {$codigo} criado");
+                    try {
+                        // Buscar dados completos do imóvel
+                        $response = $this->callApi("/dados/{$codigo}");
+                        
+                        if (!isset($response['resultSet'])) {
+                            throw new \Exception("Dados não encontrados para imóvel {$codigo}");
+                        }
+                        
+                        $imovel = $response['resultSet'];
+                        
+                        // Verificar se já existe
+                        $existing = Property::where('codigo_imovel', $codigo)->first();
+                        
+                        $data = $this->mapPropertyData($imovel);
+                        
+                        if ($existing) {
+                            $existing->update($data);
+                            $stats['updated']++;
+                            Log::debug("✏️ Imóvel {$codigo} atualizado");
+                        } else {
+                            Property::create($data);
+                            $stats['new']++;
+                            Log::debug("➕ Imóvel {$codigo} criado");
+                        }
+                        
+                    } catch (\Exception $e) {
+                        $stats['errors']++;
+                        Log::error("❌ Erro ao processar imóvel {$codigo}", [
+                            'error' => $e->getMessage()
+                        ]);
                     }
-                    
-                } catch (\Exception $e) {
-                    $stats['errors']++;
-                    Log::error("❌ Erro ao processar imóvel {$codigo}", [
-                        'error' => $e->getMessage()
-                    ]);
                 }
-            }
+                
+                $page++;
+                
+            } while ($page <= $totalPages);
             
             $elapsed = round((microtime(true) - $startTime) * 1000, 2);
             
