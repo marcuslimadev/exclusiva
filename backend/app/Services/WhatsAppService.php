@@ -75,13 +75,9 @@ class WhatsAppService
             // Limpar telefone
             $telefone = $this->cleanPhoneNumber($from);
             
-            // 1. Obter ou criar conversa com dados completos
+            // 1. Obter ou criar conversa
             $conversaData = [
-                'profile_name' => $profileName,
-                'source' => $source,
-                'city' => $city,
-                'state' => $state,
-                'country' => $country
+                'profile_name' => $profileName
             ];
             $conversa = $this->getOrCreateConversa($telefone, $conversaData);
             
@@ -135,30 +131,21 @@ class WhatsAppService
             $conversa = Conversa::create([
                 'telefone' => $telefone,
                 'whatsapp_name' => $dados['profile_name'],
-                'city' => $dados['city'],
-                'state' => $dados['state'],
-                'country' => $dados['country'],
                 'status' => 'ativa',
-                'stage' => 'boas_vindas', // Stage inicial correto
+                'stage' => 'boas_vindas',
                 'iniciada_em' => Carbon::now()
             ]);
             
-            Log::info('Nova conversa criada com dados geográficos', [
+            Log::info('Nova conversa criada', [
                 'id' => $conversa->id,
                 'telefone' => $telefone,
-                'whatsapp_name' => $dados['profile_name'],
-                'city' => $dados['city'],
-                'state' => $dados['state']
+                'whatsapp_name' => $dados['profile_name']
             ]);
         } else {
-            // Atualizar dados geográficos se não existirem
-            $updates = [];
-            if (!$conversa->city && $dados['city']) $updates['city'] = $dados['city'];
-            if (!$conversa->state && $dados['state']) $updates['state'] = $dados['state'];
-            
-            if (!empty($updates)) {
-                $conversa->update($updates);
-                Log::info('Conversa atualizada com novos dados geográficos', $updates);
+            // Atualizar nome se não existir
+            if (!$conversa->whatsapp_name && $dados['profile_name']) {
+                $conversa->update(['whatsapp_name' => $dados['profile_name']]);
+                Log::info('Conversa atualizada com nome', ['whatsapp_name' => $dados['profile_name']]);
             }
         }
         
