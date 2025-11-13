@@ -79,8 +79,6 @@ class WhatsAppService
             $conversaData = [
                 'profile_name' => $profileName,
                 'source' => $source,
-                'latitude' => $latitude,
-                'longitude' => $longitude,
                 'city' => $city,
                 'state' => $state,
                 'country' => $country
@@ -137,7 +135,6 @@ class WhatsAppService
             $conversa = Conversa::create([
                 'telefone' => $telefone,
                 'whatsapp_name' => $dados['profile_name'],
-                'wa_id' => $dados['wa_id'],
                 'city' => $dados['city'],
                 'state' => $dados['state'],
                 'country' => $dados['country'],
@@ -150,14 +147,12 @@ class WhatsAppService
                 'id' => $conversa->id,
                 'telefone' => $telefone,
                 'whatsapp_name' => $dados['profile_name'],
-                'wa_id' => $dados['wa_id'],
                 'city' => $dados['city'],
                 'state' => $dados['state']
             ]);
         } else {
             // Atualizar dados geográficos se não existirem
             $updates = [];
-            if (!$conversa->wa_id && $dados['wa_id']) $updates['wa_id'] = $dados['wa_id'];
             if (!$conversa->city && $dados['city']) $updates['city'] = $dados['city'];
             if (!$conversa->state && $dados['state']) $updates['state'] = $dados['state'];
             
