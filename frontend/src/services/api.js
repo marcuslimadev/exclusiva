@@ -1,7 +1,10 @@
 import axios from 'axios'
 
+// Usa variável de ambiente do Vite ou fallback para desenvolvimento
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost/imobi/backend/public'
+
 const api = axios.create({
-  baseURL: 'http://localhost/imobi/backend/public',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json'
   }
