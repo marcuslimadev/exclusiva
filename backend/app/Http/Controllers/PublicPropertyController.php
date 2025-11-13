@@ -1,0 +1,79 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Property;
+use Illuminate\Http\Request;
+
+class PublicPropertyController extends Controller
+{
+    /**
+     * Listar imóveis disponíveis (público)
+     * 
+     * GET /api/properties
+     */
+    public function index(Request $request)
+    {
+        $query = Property::where('active', 1)
+            ->where('exibir_imovel', 1)
+            ->orderBy('created_at', 'desc');
+        
+        // Filtros opcionais
+        if ($request->has('tipo')) {
+            $query->where('tipo_imovel', 'ILIKE', '%' . $request->tipo . '%');
+        }
+        
+        if ($request->has('cidade')) {
+            $query->where('cidade', 'ILIKE', '%' . $request->cidade . '%');
+        }
+        
+        if ($request->has('bairro')) {
+            $query->where('bairro', 'ILIKE', '%' . $request->bairro . '%');
+        }
+        
+        if ($request->has('quartos_min')) {
+            $query->where('dormitorios', '>=', $request->quartos_min);
+        }
+        
+        if ($request->has('preco_min')) {
+            $query->where('valor_venda', '>=', $request->preco_min);
+        }
+        
+        if ($request->has('preco_max')) {
+            $query->where('valor_venda', '<=', $request->preco_max);
+        }
+        
+        $properties = $query->get();
+        
+        return response()->json([
+            'success' => true,
+            'total' => $properties->count(),
+            'data' => $properties
+        ]);
+    }
+    
+    /**
+     * Detalhes de um imóvel específico
+     * 
+     * GET /api/properties/{codigo}
+     */
+    public function show($codigo)
+    {
+        $property = Property::where('codigo_imovel', $codigo)
+            ->where('active', 1)
+            ->where('exibir_imovel', 1)
+            ->first();
+        
+        if (!$property) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Imóvel não encontrado'
+            ], 404);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $property
+        ]);
+    }
+}

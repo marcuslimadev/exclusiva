@@ -151,7 +151,15 @@ $router->get('/api-public/conversas', function () {
 });
 
 // ===========================
-// Webhooks (sem autenticação)
+// ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
+// ===========================
+$router->group(['prefix' => 'api/properties'], function () use ($router) {
+    $router->get('/', 'PublicPropertyController@index');
+    $router->get('/{codigo}', 'PublicPropertyController@show');
+});
+
+// ===========================
+// WEBHOOK (SEM AUTENTICAÇÃO)
 // ===========================
 $router->group(['prefix' => 'webhook'], function () use ($router) {
     $router->post('/whatsapp', 'WebhookController@receive');
