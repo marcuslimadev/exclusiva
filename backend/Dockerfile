@@ -23,9 +23,14 @@ COPY . .
 # Instalar dependências do Composer
 RUN composer install --no-dev --optimize-autoloader
 
+# Criar diretórios necessários
+RUN mkdir -p /var/www/html/storage/logs
+RUN mkdir -p /var/www/html/storage/framework/cache
+RUN mkdir -p /var/www/html/storage/framework/views
+
 # Configurar permissões
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chown -R www-data:www-data /var/www/html/storage
+RUN chmod -R 775 /var/www/html/storage
 
 # Habilitar mod_rewrite do Apache
 RUN a2enmod rewrite
