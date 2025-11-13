@@ -56,6 +56,27 @@ export const useLeadsStore = defineStore('leads', {
         console.error('Erro ao atualizar lead', error)
         return false
       }
+    },
+
+    async updateLeadState(id, newState) {
+      try {
+        const response = await api.patch(`/api/leads/${id}/state`, {
+          state: newState
+        })
+        
+        const leadAtualizado = response.data.data || response.data
+        
+        // Atualizar na lista local
+        const index = this.leads.findIndex(l => l.id === id)
+        if (index !== -1) {
+          this.leads[index] = { ...this.leads[index], state: newState }
+        }
+        
+        return true
+      } catch (error) {
+        console.error('❌ Erro ao atualizar estado do lead:', error)
+        throw error
+      }
     }
   }
 })
