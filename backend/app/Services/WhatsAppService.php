@@ -154,10 +154,16 @@ class WhatsAppService
                 'whatsapp_name' => $dados['profile_name']
             ]);
         } else {
-            // Atualizar nome se não existir
-            if (!$conversa->whatsapp_name && $dados['profile_name']) {
-                $conversa->update(['whatsapp_name' => $dados['profile_name']]);
-                Log::info('Conversa atualizada com nome', ['whatsapp_name' => $dados['profile_name']]);
+            // SEMPRE atualizar nome se vier do webhook
+            if ($dados['profile_name']) {
+                $conversa->update([
+                    'whatsapp_name' => $dados['profile_name'],
+                    'ultima_atividade' => Carbon::now()
+                ]);
+                Log::info('Conversa atualizada', [
+                    'id' => $conversa->id,
+                    'whatsapp_name' => $dados['profile_name']
+                ]);
             }
         }
         
@@ -202,15 +208,28 @@ class WhatsAppService
      */
     private function handleRegularMessage($conversa, $message)
     {
+        Log::info('📨 Processando mensagem regular', [
+            'conversa_id' => $conversa->id,
+            'stage_atual' => $conversa->stage,
+            'mensagem' => substr($message, 0, 100)
+        ]);
+        
         // Buscar histórico da conversa
         $historico = $this->getConversationHistory($conversa->id);
         
         // Processar com IA
         $aiResponse = $this->openai->processMessage($message, $historico);
         
+        Log::info('🤖 Resposta da IA', [
+            'success' => $aiResponse['success'] ?? false,
+            'has_content' => isset($aiResponse['content']),
+            'content_preview' => isset($aiResponse['content']) ? substr($aiResponse['content'], 0, 100) : 'N/A'
+        ]);
+        
         if ($aiResponse['success']) {
             // Enviar resposta
-            $this->sendMessage($conversa->id, $conversa->telefone, $aiResponse['content']);
+            $sendResult = $this->sendMessage($conversa->id, $conversa->telefone, $aiResponse['content']);
+            Log::info('📤 Mensagem enviada', ['success' => $sendResult['success'] ?? false]);
             
             // Tentar extrair dados do lead
             $this->extractAndUpdateLeadData($conversa);
@@ -227,6 +246,10 @@ class WhatsAppService
                 $this->performPropertyMatching($conversa->lead, $conversa);
                 $conversa->update(['stage' => 'apresentacao']);
             }
+        } else {
+            Log::error('❌ IA falhou ao processar mensagem', [
+                'error' => $aiResponse['error'] ?? 'Erro desconhecido'
+            ]);
         }
         
         return [

@@ -29,6 +29,13 @@ export const useConversasStore = defineStore('conversas', {
         const data = response.data.data || response.data
         this.conversaAtiva = data
         this.mensagens = data.mensagens || []
+        console.log('📩 Conversa carregada:', {
+          id: data.id,
+          telefone: data.telefone,
+          nome: data.lead_nome,
+          totalMensagens: this.mensagens.length,
+          mensagens: this.mensagens
+        })
       } catch (error) {
         console.error('Erro ao selecionar conversa', error)
       } finally {

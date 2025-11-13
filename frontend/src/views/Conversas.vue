@@ -125,10 +125,10 @@
                     ? 'bg-green-600 text-white rounded-br-none' 
                     : 'bg-white text-gray-900 rounded-bl-none border border-gray-200'"
                 >
-                  <p class="text-sm whitespace-pre-wrap break-words">{{ mensagem.body }}</p>
+                  <p class="text-sm whitespace-pre-wrap break-words">{{ mensagem.content }}</p>
                   <div class="flex items-center justify-end mt-1 space-x-1">
                     <span class="text-xs opacity-75">
-                      {{ formatarHora(mensagem.created_at) }}
+                      {{ formatarHora(mensagem.sent_at) }}
                     </span>
                     <svg v-if="mensagem.direction === 'outgoing'" class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
