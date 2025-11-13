@@ -40,6 +40,21 @@ $router->get('/db-test', function () {
     }
 });
 
+// Teste de leads (sem autenticação)
+$router->get('/test-leads', function () {
+    try {
+        $leads = app('db')->select('SELECT id, nome, telefone, email, origem, created_at FROM leads ORDER BY created_at DESC LIMIT 5');
+        return response()->json([
+            'total' => count($leads),
+            'leads' => $leads
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
 // ===========================
 // Webhooks (sem autenticação)
 // ===========================
