@@ -42,6 +42,23 @@ class LeadsController extends Controller
             // Get all leads (simplificado - sem paginação por enquanto)
             $leads = $query->get();
             
+            // Formatar datas para ISO8601 (compatível com JavaScript)
+            $leads = collect($leads)->map(function($lead) {
+                if (isset($lead->created_at)) {
+                    $lead->created_at = date('c', strtotime($lead->created_at));
+                }
+                if (isset($lead->updated_at)) {
+                    $lead->updated_at = date('c', strtotime($lead->updated_at));
+                }
+                if (isset($lead->primeira_interacao)) {
+                    $lead->primeira_interacao = date('c', strtotime($lead->primeira_interacao));
+                }
+                if (isset($lead->ultima_interacao)) {
+                    $lead->ultima_interacao = date('c', strtotime($lead->ultima_interacao));
+                }
+                return $lead;
+            });
+            
             return response()->json([
                 'success' => true,
                 'data' => $leads
