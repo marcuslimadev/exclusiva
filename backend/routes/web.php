@@ -17,6 +17,16 @@ $router->get('/', function () use ($router) {
     ]);
 });
 
+// Landing Page Pública
+$router->get('/imoveis', function () {
+    $path = base_path('../public/index.html');
+    if (file_exists($path)) {
+        return response(file_get_contents($path))
+            ->header('Content-Type', 'text/html');
+    }
+    return response('Landing page não encontrada', 404);
+});
+
 // Database test
 $router->get('/db-test', function () {
     try {
