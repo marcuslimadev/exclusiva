@@ -140,6 +140,21 @@
         </div>
       </div>
     </div>
+
+    <!-- Modals -->
+    <LeadDetailsModal
+      :is-open="showDetailsModal"
+      :lead-id="selectedLeadId"
+      @close="showDetailsModal = false"
+      @edit="handleEditFromDetails"
+    />
+
+    <LeadEditModal
+      :is-open="showEditModal"
+      :lead="selectedLead"
+      @close="showEditModal = false"
+      @saved="handleLeadSaved"
+    />
   </div>
 </template>
 
@@ -148,6 +163,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useLeadsStore } from '../stores/leads'
 import Navbar from '../components/Navbar.vue'
 import KanbanColumn from '../components/KanbanColumn.vue'
+import LeadDetailsModal from '../components/LeadDetailsModal.vue'
+import LeadEditModal from '../components/LeadEditModal.vue'
 
 const leadsStore = useLeadsStore()
 
@@ -157,6 +174,12 @@ const filtros = computed(() => leadsStore.filtros)
 
 const viewMode = ref('kanban') // 'kanban' ou 'table'
 const draggedLead = ref(null)
+
+// Modals
+const showDetailsModal = ref(false)
+const showEditModal = ref(false)
+const selectedLeadId = ref(null)
+const selectedLead = ref(null)
 
 onMounted(() => {
   leadsStore.fetchLeads()
@@ -240,10 +263,24 @@ const getStatusClass = (status) => {
 
 // Ações
 const verDetalhes = (lead) => {
-  alert(`Ver detalhes do lead: ${lead.nome || lead.telefone}`)
+  selectedLeadId.value = lead.id
+  showDetailsModal.value = true
 }
 
 const editarLead = (lead) => {
-  alert(`Editar lead: ${lead.nome || lead.telefone}`)
+  selectedLead.value = lead
+  showEditModal.value = true
+}
+
+const handleEditFromDetails = (lead) => {
+  showDetailsModal.value = false
+  setTimeout(() => {
+    selectedLead.value = lead
+    showEditModal.value = true
+  }, 300)
+}
+
+const handleLeadSaved = async () => {
+  await leadsStore.fetchLeads()
 }
 </script>
