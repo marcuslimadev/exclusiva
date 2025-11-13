@@ -99,7 +99,25 @@ class WhatsAppService
             
             // 3. Processar áudio se necessário
             if ($messageType === 'audio' && $mediaUrl) {
+                // Enviar feedback imediato
+                $feedbackMsg = "🎤 Recebi seu áudio! Vou ouvir agora e já te respondo... ⏳";
+                $this->twilio->sendMessage($telefone, $feedbackMsg);
+                
+                // Salvar mensagem de feedback
+                $this->saveMensagem($conversa->id, [
+                    'direction' => 'outgoing',
+                    'message_type' => 'text',
+                    'content' => $feedbackMsg,
+                    'status' => 'sent'
+                ]);
+                
+                // Transcrever áudio
                 $body = $this->transcribeAudio($mediaUrl, $conversa->id, $mensagem->id);
+                
+                Log::info('🎤 Áudio transcrito', [
+                    'conversa_id' => $conversa->id,
+                    'transcricao' => $body
+                ]);
             }
             
             // 4. Garantir que lead existe (criar se não existir)
@@ -110,12 +128,19 @@ class WhatsAppService
             }
             
             // 5. Verificar se é primeira mensagem (boas-vindas)
-            if ($conversa->mensagens()->count() === 1) {
+            $totalMensagens = $conversa->mensagens()->count();
+            
+            // Se for áudio, desconta a mensagem de feedback
+            if ($messageType === 'audio') {
+                $totalMensagens -= 1; // Remove feedback "Vou ouvir agora"
+            }
+            
+            if ($totalMensagens === 1) {
                 return $this->handleFirstMessage($conversa, $telefone, $conversaData);
             }
             
-            // 6. Processar com IA e responder
-            return $this->handleRegularMessage($conversa, $body);
+            // 6. Processar com IA e responder (informando se veio de áudio)
+            return $this->handleRegularMessage($conversa, $body, $messageType === 'audio');
             
         } catch (\Exception $e) {
             Log::error('Erro ao processar webhook', [
@@ -206,19 +231,20 @@ class WhatsAppService
     /**
      * Processar mensagem regular com progressão inteligente de stages
      */
-    private function handleRegularMessage($conversa, $message)
+    private function handleRegularMessage($conversa, $message, $isFromAudio = false)
     {
         Log::info('📨 Processando mensagem regular', [
             'conversa_id' => $conversa->id,
             'stage_atual' => $conversa->stage,
-            'mensagem' => substr($message, 0, 100)
+            'mensagem' => substr($message, 0, 100),
+            'is_audio' => $isFromAudio
         ]);
         
         // Buscar histórico da conversa
         $historico = $this->getConversationHistory($conversa->id);
         
-        // Processar com IA
-        $aiResponse = $this->openai->processMessage($message, $historico);
+        // Processar com IA (informando se veio de áudio)
+        $aiResponse = $this->openai->processMessage($message, $historico, $isFromAudio);
         
         Log::info('🤖 Resposta da IA', [
             'success' => $aiResponse['success'] ?? false,

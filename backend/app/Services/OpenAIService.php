@@ -124,17 +124,22 @@ Retorne APENAS um JSON válido sem explicações adicionais.";
      * 
      * @param string $message Mensagem do usuário
      * @param string $context Contexto da conversa
+     * @param bool $isFromAudio Se a mensagem veio de transcrição de áudio
      * @return array Resposta gerada
      */
-    public function processMessage($message, $context = '')
+    public function processMessage($message, $context = '', $isFromAudio = false)
     {
+        $audioInstruction = $isFromAudio 
+            ? "\n- O cliente acabou de enviar um ÁUDIO que foi transcrito. Responda de forma natural, mostrando que você OUVIU e ENTENDEU o que ele disse. Use expressões como 'Entendi!', 'Certo!', 'Perfeito!' para confirmar que você ouviu." 
+            : "";
+        
         $systemPrompt = "Você é um atendente virtual da Exclusiva Lar Imóveis, uma imobiliária especializada.
         
 Seu objetivo é:
 - Ser cordial, profissional e prestativo
 - Fazer perguntas para entender as necessidades do cliente
 - Coletar informações sobre: orçamento, localização preferida, quantidade de quartos, características desejadas
-- Manter o tom conversacional e amigável
+- Manter o tom conversacional e amigável{$audioInstruction}
 
 IMPORTANTE: 
 - Suas respostas devem ser curtas e diretas (máximo 3 linhas)
