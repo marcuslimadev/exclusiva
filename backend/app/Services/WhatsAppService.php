@@ -519,11 +519,6 @@ class WhatsAppService
         $leadData = [
             'nome' => $dados['profile_name'],
             'whatsapp_name' => $dados['profile_name'],
-            'city' => $dados['city'] ?? null,
-            'state' => $dados['state'] ?? null,
-            'country' => $dados['country'] ?? null,
-            'latitude' => $dados['latitude'] ?? null,
-            'longitude' => $dados['longitude'] ?? null,
             'localizacao' => $localizacao,
             'status' => 'novo',
             'origem' => 'whatsapp',
@@ -536,14 +531,11 @@ class WhatsAppService
             $leadData
         );
         
-        // Se o lead já existia, atualizar dados geográficos se não tiver
+        // Se o lead já existia, atualizar dados se não tiver
         if (!$lead->wasRecentlyCreated) {
             $updates = [];
             if (!$lead->nome && isset($dados['profile_name'])) $updates['nome'] = $dados['profile_name'];
-            if (!$lead->city && isset($dados['city'])) $updates['city'] = $dados['city'];
-            if (!$lead->state && isset($dados['state'])) $updates['state'] = $dados['state'];
-            if (!$lead->latitude && isset($dados['latitude'])) $updates['latitude'] = $dados['latitude'];
-            if (!$lead->longitude && isset($dados['longitude'])) $updates['longitude'] = $dados['longitude'];
+            if (!$lead->localizacao && $localizacao) $updates['localizacao'] = $localizacao;
             
             if (!empty($updates)) {
                 $lead->update($updates);
@@ -556,11 +548,7 @@ class WhatsAppService
         Log::info('🆔 Lead ID: ' . $lead->id);
         Log::info('👤 Nome: ' . ($dados['profile_name'] ?? 'N/A'));
         Log::info('📱 Telefone: ' . $telefone);
-        Log::info('🏙️  Cidade: ' . ($dados['city'] ?? 'N/A'));
-        Log::info('🗺️  Estado: ' . ($dados['state'] ?? 'N/A'));
-        if ($dados['latitude'] && $dados['longitude']) {
-            Log::info('📌 GPS: ' . $dados['latitude'] . ', ' . $dados['longitude']);
-        }
+        Log::info('📍 Localização: ' . ($localizacao ?? 'N/A'));
         Log::info('🎯 Status: ' . $lead->status);
         Log::info('─────────────────────────────────────────────────────────────────');
         
