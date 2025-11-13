@@ -160,6 +160,18 @@ $router->get('/api-public/conversas', function () {
     }
 });
 
+// Usuários de teste (TEMPORÁRIO - REMOVER DEPOIS)
+$router->get('/api-public/test-users', function () {
+    try {
+        $users = app('db')->table('users')
+            ->select('id', 'nome', 'email', 'tipo', 'ativo', 'created_at')
+            ->get();
+        return response()->json(['success' => true, 'data' => $users]);
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+});
+
 // ===========================
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
