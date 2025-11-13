@@ -46,7 +46,17 @@ class WhatsAppService
             $messageSid = $webhookData['MessageSid'] ?? null;
             $mediaUrl = $webhookData['MediaUrl0'] ?? null;
             $mediaType = $webhookData['MediaContentType0'] ?? null;
+            
+            // Dados do perfil WhatsApp
             $profileName = $webhookData['ProfileName'] ?? null;
+            $waId = $webhookData['WaId'] ?? null; // WhatsApp ID
+            
+            // Dados de localização (se disponível)
+            $latitude = $webhookData['Latitude'] ?? null;
+            $longitude = $webhookData['Longitude'] ?? null;
+            $city = $webhookData['FromCity'] ?? null;
+            $state = $webhookData['FromState'] ?? null;
+            $country = $webhookData['FromCountry'] ?? null;
             
             if (!$from) {
                 return ['success' => false, 'error' => 'Número de origem não identificado'];
@@ -55,8 +65,17 @@ class WhatsAppService
             // Limpar telefone
             $telefone = $this->cleanPhoneNumber($from);
             
-            // 1. Obter ou criar conversa
-            $conversa = $this->getOrCreateConversa($telefone, $profileName);
+            // 1. Obter ou criar conversa com dados completos
+            $conversaData = [
+                'profile_name' => $profileName,
+                'wa_id' => $waId,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'city' => $city,
+                'state' => $state,
+                'country' => $country
+            ];
+            $conversa = $this->getOrCreateConversa($telefone, $conversaData);
             
             // 2. Registrar mensagem recebida
             $messageType = $this->detectMessageType($mediaUrl, $mediaType);
@@ -76,7 +95,7 @@ class WhatsAppService
             
             // 4. Verificar se é primeira mensagem (boas-vindas)
             if ($conversa->mensagens()->count() === 1) {
-                return $this->handleFirstMessage($conversa, $telefone, $profileName);
+                return $this->handleFirstMessage($conversa, $telefone, $conversaData);
             }
             
             // 5. Processar com IA e responder
@@ -98,7 +117,7 @@ class WhatsAppService
     /**
      * Obter ou criar conversa
      */
-    private function getOrCreateConversa($telefone, $profileName)
+    private function getOrCreateConversa($telefone, $dados)
     {
         $conversa = Conversa::where('telefone', $telefone)
             ->where('status', '!=', 'finalizada')
@@ -107,13 +126,19 @@ class WhatsAppService
         if (!$conversa) {
             $conversa = Conversa::create([
                 'telefone' => $telefone,
-                'whatsapp_name' => $profileName,
+                'whatsapp_name' => $dados['profile_name'],
                 'status' => 'ativa',
-                'stage' => 'inicial',
+                'stage' => 'boas_vindas', // Stage inicial correto
                 'iniciada_em' => Carbon::now()
             ]);
             
-            Log::info('Nova conversa criada', ['id' => $conversa->id, 'telefone' => $telefone]);
+            Log::info('Nova conversa criada', [
+                'id' => $conversa->id,
+                'telefone' => $telefone,
+                'whatsapp_name' => $dados['profile_name'],
+                'city' => $dados['city'],
+                'state' => $dados['state']
+            ]);
         }
         
         return $conversa;
@@ -122,12 +147,15 @@ class WhatsAppService
     /**
      * Primeira mensagem - Enviar boas-vindas
      */
-    private function handleFirstMessage($conversa, $telefone, $profileName)
+    private function handleFirstMessage($conversa, $telefone, $dados)
     {
-        // Criar lead
-        $lead = $this->createLead($telefone, $profileName, $conversa->id);
+        // Criar lead com todos os dados capturados
+        $lead = $this->createLead($telefone, $dados, $conversa->id);
         
-        $conversa->update(['lead_id' => $lead->id]);
+        $conversa->update([
+            'lead_id' => $lead->id,
+            'stage' => 'coleta_dados' // Avança para coleta de dados
+        ]);
         
         // Mensagem de boas-vindas
         $mensagemBoasVindas = "Olá! 😊 Que alegria ter você aqui na *Exclusiva Lar Imóveis*!\n\n" .
@@ -338,20 +366,39 @@ class WhatsAppService
     }
     
     /**
-     * Criar lead
+     * Criar lead com dados completos do WhatsApp
      */
-    private function createLead($telefone, $profileName, $conversaId)
+    private function createLead($telefone, $dados, $conversaId)
     {
+        // Montar localização se tiver cidade/estado
+        $localizacao = null;
+        if ($dados['city'] && $dados['state']) {
+            $localizacao = $dados['city'] . ', ' . $dados['state'];
+        } elseif ($dados['city']) {
+            $localizacao = $dados['city'];
+        } elseif ($dados['state']) {
+            $localizacao = $dados['state'];
+        }
+        
         $lead = Lead::firstOrCreate(
             ['telefone' => $telefone],
             [
-                'whatsapp_name' => $profileName,
+                'nome' => $dados['profile_name'], // Já pega o nome de imediato!
+                'whatsapp_name' => $dados['profile_name'],
+                'localizacao' => $localizacao, // Localização automática se disponível
                 'status' => 'novo',
                 'origem' => 'whatsapp',
                 'primeira_interacao' => Carbon::now(),
                 'ultima_interacao' => Carbon::now()
             ]
         );
+        
+        Log::info('Lead criado/atualizado com dados do WhatsApp', [
+            'lead_id' => $lead->id,
+            'nome' => $dados['profile_name'],
+            'telefone' => $telefone,
+            'localizacao' => $localizacao
+        ]);
         
         return $lead;
     }

@@ -61,19 +61,55 @@ class ConversasController extends Controller
      */
     public function show($id)
     {
-        $conversa = Conversa::with(['lead', 'corretor', 'mensagens'])
-            ->findOrFail($id);
-        
-        // Marcar mensagens como lidas
-        Mensagem::where('conversa_id', $id)
-            ->where('direction', 'incoming')
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
-        
-        return response()->json([
-            'success' => true,
-            'data' => $conversa
-        ]);
+        try {
+            $db = app('db');
+            
+            // Buscar conversa com dados do lead
+            $conversa = $db->table('conversas')
+                ->leftJoin('leads', 'conversas.lead_id', '=', 'leads.id')
+                ->leftJoin('users', 'conversas.corretor_id', '=', 'users.id')
+                ->select(
+                    'conversas.*',
+                    'leads.nome as lead_nome',
+                    'leads.email as lead_email',
+                    'leads.whatsapp_name as lead_whatsapp_name',
+                    'users.nome as corretor_nome'
+                )
+                ->where('conversas.id', $id)
+                ->first();
+            
+            if (!$conversa) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Conversa não encontrada'
+                ], 404);
+            }
+            
+            // Buscar mensagens
+            $mensagens = $db->table('mensagens')
+                ->where('conversa_id', $id)
+                ->orderBy('sent_at', 'asc')
+                ->get();
+            
+            // Marcar mensagens como lidas
+            $db->table('mensagens')
+                ->where('conversa_id', $id)
+                ->where('direction', 'incoming')
+                ->whereNull('read_at')
+                ->update(['read_at' => date('Y-m-d H:i:s')]);
+            
+            $conversa->mensagens = $mensagens;
+            
+            return response()->json([
+                'success' => true,
+                'data' => $conversa
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
     
     /**
