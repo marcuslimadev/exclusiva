@@ -19,24 +19,25 @@ class DashboardController extends Controller
     public function stats()
     {
         try {
+            $db = app('db');
             $stats = [
                 'leads' => [
-                    'total' => DB::table('leads')->count(),
-                    'novos' => DB::table('leads')->where('status', 'novo')->count(),
-                    'em_atendimento' => DB::table('leads')->where('status', 'em_atendimento')->count(),
-                    'qualificados' => DB::table('leads')->where('status', 'qualificado')->count(),
-                    'fechados_mes' => DB::table('leads')
+                    'total' => $db->table('leads')->count(),
+                    'novos' => $db->table('leads')->where('status', 'novo')->count(),
+                    'em_atendimento' => $db->table('leads')->where('status', 'em_atendimento')->count(),
+                    'qualificados' => $db->table('leads')->where('status', 'qualificado')->count(),
+                    'fechados_mes' => $db->table('leads')
                         ->where('status', 'fechado')
-                        ->whereRaw('EXTRACT(MONTH FROM updated_at) = ?', [now()->month])
+                        ->whereRaw('EXTRACT(MONTH FROM updated_at) = ?', [date('m')])
                         ->count()
                 ],
                 'conversas' => [
-                    'ativas' => DB::table('conversas')->where('status', 'ativa')->count(),
-                    'hoje' => DB::table('conversas')->whereDate('iniciada_em', today())->count(),
-                    'aguardando' => DB::table('conversas')->where('status', 'aguardando_corretor')->count()
+                    'ativas' => $db->table('conversas')->where('status', 'ativa')->count(),
+                    'hoje' => $db->table('conversas')->whereDate('iniciada_em', date('Y-m-d'))->count(),
+                    'aguardando' => $db->table('conversas')->where('status', 'aguardando_corretor')->count()
                 ],
                 'corretores' => [
-                    'total' => DB::table('users')->where('tipo', 'corretor')->where('ativo', true)->count(),
+                    'total' => $db->table('users')->where('tipo', 'corretor')->where('ativo', true)->count(),
                     'online' => 0
                 ]
             ];
@@ -59,9 +60,11 @@ class DashboardController extends Controller
      */
     public function chartAtendimentos()
     {
-        $dados = DB::table('conversas')
-            ->select(DB::raw('DATE(iniciada_em) as data'), DB::raw('COUNT(*) as total'))
-            ->where('iniciada_em', '>=', now()->subDays(7))
+        $db = app('db');
+        $dataInicio = date('Y-m-d', strtotime('-7 days'));
+        $dados = $db->table('conversas')
+            ->select($db->raw('DATE(iniciada_em) as data'), $db->raw('COUNT(*) as total'))
+            ->where('iniciada_em', '>=', $dataInicio)
             ->groupBy('data')
             ->orderBy('data')
             ->get();
@@ -79,7 +82,8 @@ class DashboardController extends Controller
     public function atividades()
     {
         try {
-            $conversas = DB::table('conversas')
+            $db = app('db');
+            $conversas = $db->table('conversas')
                 ->leftJoin('leads', 'conversas.lead_id', '=', 'leads.id')
                 ->select(
                     'conversas.id as conversa_id',
