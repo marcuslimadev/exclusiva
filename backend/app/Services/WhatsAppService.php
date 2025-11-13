@@ -493,23 +493,26 @@ class WhatsAppService
     {
         // Montar localização se tiver cidade/estado
         $localizacao = null;
-        if ($dados['city'] && $dados['state']) {
-            $localizacao = $dados['city'] . ', ' . $dados['state'];
-        } elseif ($dados['city']) {
-            $localizacao = $dados['city'];
-        } elseif ($dados['state']) {
-            $localizacao = $dados['state'];
+        $city = $dados['city'] ?? null;
+        $state = $dados['state'] ?? null;
+        
+        if ($city && $state) {
+            $localizacao = $city . ', ' . $state;
+        } elseif ($city) {
+            $localizacao = $city;
+        } elseif ($state) {
+            $localizacao = $state;
         }
         
         $leadData = [
-            'nome' => $dados['profile_name'], // Já pega o nome de imediato!
+            'nome' => $dados['profile_name'],
             'whatsapp_name' => $dados['profile_name'],
-            'city' => $dados['city'],
-            'state' => $dados['state'],
-            'country' => $dados['country'],
-            'latitude' => $dados['latitude'],
-            'longitude' => $dados['longitude'],
-            'localizacao' => $localizacao, // Localização textual automática
+            'city' => $dados['city'] ?? null,
+            'state' => $dados['state'] ?? null,
+            'country' => $dados['country'] ?? null,
+            'latitude' => $dados['latitude'] ?? null,
+            'longitude' => $dados['longitude'] ?? null,
+            'localizacao' => $localizacao,
             'status' => 'novo',
             'origem' => 'whatsapp',
             'primeira_interacao' => Carbon::now(),
@@ -524,11 +527,11 @@ class WhatsAppService
         // Se o lead já existia, atualizar dados geográficos se não tiver
         if (!$lead->wasRecentlyCreated) {
             $updates = [];
-            if (!$lead->nome && $dados['profile_name']) $updates['nome'] = $dados['profile_name'];
-            if (!$lead->city && $dados['city']) $updates['city'] = $dados['city'];
-            if (!$lead->state && $dados['state']) $updates['state'] = $dados['state'];
-            if (!$lead->latitude && $dados['latitude']) $updates['latitude'] = $dados['latitude'];
-            if (!$lead->longitude && $dados['longitude']) $updates['longitude'] = $dados['longitude'];
+            if (!$lead->nome && isset($dados['profile_name'])) $updates['nome'] = $dados['profile_name'];
+            if (!$lead->city && isset($dados['city'])) $updates['city'] = $dados['city'];
+            if (!$lead->state && isset($dados['state'])) $updates['state'] = $dados['state'];
+            if (!$lead->latitude && isset($dados['latitude'])) $updates['latitude'] = $dados['latitude'];
+            if (!$lead->longitude && isset($dados['longitude'])) $updates['longitude'] = $dados['longitude'];
             
             if (!empty($updates)) {
                 $lead->update($updates);
