@@ -18,7 +18,13 @@ export const useDashboardStore = defineStore('dashboard', {
       this.loading = true
       try {
         const response = await api.get('/api/dashboard/stats')
-        this.stats = response.data
+        const data = response.data.data || response.data
+        this.stats = {
+          totalLeads: data.leads?.total || 0,
+          conversasAtivas: data.conversas?.ativas || 0,
+          leadsHoje: data.conversas?.hoje || 0,
+          taxaConversao: 0
+        }
       } catch (error) {
         console.error('Erro ao buscar estatísticas', error)
       } finally {
@@ -29,7 +35,7 @@ export const useDashboardStore = defineStore('dashboard', {
     async fetchAtividades() {
       try {
         const response = await api.get('/api/dashboard/atividades')
-        this.atividadesRecentes = response.data
+        this.atividadesRecentes = response.data.data || response.data
       } catch (error) {
         console.error('Erro ao buscar atividades', error)
       }

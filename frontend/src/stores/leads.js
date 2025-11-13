@@ -32,7 +32,7 @@ export const useLeadsStore = defineStore('leads', {
       this.loading = true
       try {
         const response = await api.get('/api/leads')
-        this.leads = response.data
+        this.leads = response.data.data || response.data
       } catch (error) {
         console.error('Erro ao buscar leads', error)
       } finally {
@@ -43,11 +43,12 @@ export const useLeadsStore = defineStore('leads', {
     async atualizarLead(id, dados) {
       try {
         const response = await api.put(`/api/leads/${id}`, dados)
+        const leadAtualizado = response.data.data || response.data
         
         // Atualizar na lista
         const index = this.leads.findIndex(l => l.id === id)
         if (index !== -1) {
-          this.leads[index] = response.data
+          this.leads[index] = leadAtualizado
         }
         
         return true

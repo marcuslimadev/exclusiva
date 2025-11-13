@@ -14,7 +14,7 @@ export const useConversasStore = defineStore('conversas', {
       this.loading = true
       try {
         const response = await api.get('/api/conversas')
-        this.conversas = response.data
+        this.conversas = response.data.data || response.data
       } catch (error) {
         console.error('Erro ao buscar conversas', error)
       } finally {
@@ -26,8 +26,9 @@ export const useConversasStore = defineStore('conversas', {
       this.loading = true
       try {
         const response = await api.get(`/api/conversas/${id}`)
-        this.conversaAtiva = response.data.conversa
-        this.mensagens = response.data.mensagens
+        const data = response.data.data || response.data
+        this.conversaAtiva = data
+        this.mensagens = data.mensagens || []
       } catch (error) {
         console.error('Erro ao selecionar conversa', error)
       } finally {
