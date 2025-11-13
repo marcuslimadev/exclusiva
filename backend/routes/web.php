@@ -55,6 +55,23 @@ $router->get('/test-leads', function () {
     }
 });
 
+// Teste de stats (sem autenticação)
+$router->get('/test-stats', function () {
+    try {
+        $stats = [
+            'leads_total' => app('db')->table('leads')->count(),
+            'leads_novos' => app('db')->table('leads')->where('status', 'novo')->count(),
+            'conversas_ativas' => app('db')->table('conversas')->where('status', 'ativa')->count(),
+            'corretores_ativos' => app('db')->table('users')->where('tipo', 'corretor')->where('ativo', true)->count()
+        ];
+        return response()->json($stats);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
 // ===========================
 // Webhooks (sem autenticação)
 // ===========================
