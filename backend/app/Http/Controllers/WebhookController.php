@@ -26,12 +26,29 @@ class WebhookController extends Controller
     {
         $webhookData = $request->all();
         
-        Log::info('=== WEBHOOK RECEBIDO NO CONTROLLER ===', $webhookData);
+        Log::info('╔════════════════════════════════════════════════════════════════╗');
+        Log::info('║           🔔 WEBHOOK RECEBIDO DO TWILIO                       ║');
+        Log::info('╚════════════════════════════════════════════════════════════════╝');
+        Log::info('📱 De: ' . ($webhookData['From'] ?? 'N/A'));
+        Log::info('👤 Nome: ' . ($webhookData['ProfileName'] ?? 'N/A'));
+        Log::info('💬 Mensagem: ' . ($webhookData['Body'] ?? '[mídia]'));
+        Log::info('🆔 MessageSid: ' . ($webhookData['MessageSid'] ?? 'N/A'));
+        Log::info('📍 Cidade: ' . ($webhookData['FromCity'] ?? 'N/A'));
+        Log::info('🗺️  Estado: ' . ($webhookData['FromState'] ?? 'N/A'));
+        Log::info('🌍 País: ' . ($webhookData['FromCountry'] ?? 'N/A'));
+        if (isset($webhookData['Latitude']) && isset($webhookData['Longitude'])) {
+            Log::info('📌 Coordenadas: ' . $webhookData['Latitude'] . ', ' . $webhookData['Longitude']);
+        }
+        Log::info('─────────────────────────────────────────────────────────────────');
         
         try {
             $result = $this->whatsappService->processIncomingMessage($webhookData);
             
-            Log::info('Webhook processado com sucesso', $result);
+            Log::info('╔════════════════════════════════════════════════════════════════╗');
+            Log::info('║           ✅ WEBHOOK PROCESSADO COM SUCESSO                   ║');
+            Log::info('╚════════════════════════════════════════════════════════════════╝');
+            Log::info('📊 Resultado:', $result);
+            Log::info('═════════════════════════════════════════════════════════════════');
             
             // Twilio espera resposta 200 OK (pode ser vazio ou TwiML)
             return response()->json([

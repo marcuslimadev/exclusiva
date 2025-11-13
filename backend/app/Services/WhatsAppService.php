@@ -39,7 +39,7 @@ class WhatsAppService
     public function processIncomingMessage($webhookData)
     {
         try {
-            Log::info('=== WEBHOOK RECEBIDO ===', $webhookData);
+            Log::info('🔄 Extraindo dados do webhook...');
             
             $from = $webhookData['From'] ?? null;
             $body = $webhookData['Body'] ?? '';
@@ -57,6 +57,14 @@ class WhatsAppService
             $city = $webhookData['FromCity'] ?? null;
             $state = $webhookData['FromState'] ?? null;
             $country = $webhookData['FromCountry'] ?? null;
+            
+            Log::info('📦 Dados extraídos:', [
+                'telefone' => $from,
+                'nome' => $profileName,
+                'wa_id' => $waId,
+                'localizacao' => $city && $state ? "$city, $state" : ($city ?? $state ?? 'N/A'),
+                'tem_midia' => $mediaUrl ? 'Sim' : 'Não'
+            ]);
             
             if (!$from) {
                 return ['success' => false, 'error' => 'Número de origem não identificado'];
@@ -248,11 +256,10 @@ class WhatsAppService
             case 'coleta_dados':
                 // Se já tem orçamento OU localização OU quartos, progride para matching
                 if ($lead->budget_min || $lead->budget_max || $lead->localizacao || $lead->quartos) {
-                    Log::info('Stage progress: coleta_dados → matching', [
-                        'conversa_id' => $conversa->id,
-                        'lead_id' => $lead->id,
-                        'reason' => 'Dados suficientes coletados'
-                    ]);
+                    Log::info('🎯 PROGRESSÃO DE STAGE: coleta_dados → matching');
+                    Log::info('   └─ Conversa ID: ' . $conversa->id);
+                    Log::info('   └─ Lead ID: ' . $lead->id);
+                    Log::info('   └─ Motivo: Dados suficientes coletados');
                     // Não muda ainda - aguarda matching retornar resultados
                 } else {
                     // Ainda coletando dados
@@ -268,10 +275,10 @@ class WhatsAppService
                     strpos($contexto, 'visita') !== false ||
                     strpos($contexto, 'ver') !== false) {
                     $conversa->update(['stage' => 'interesse']);
-                    Log::info('Stage progress: apresentacao → interesse', [
-                        'conversa_id' => $conversa->id,
-                        'reason' => 'Cliente demonstrou interesse'
-                    ]);
+                    Log::info('🎯 PROGRESSÃO DE STAGE: apresentacao → interesse');
+                    Log::info('   └─ Conversa ID: ' . $conversa->id);
+                    Log::info('   └─ Motivo: Cliente demonstrou interesse');
+                    Log::info('   └─ Contexto detectado: ' . $contexto);
                 }
                 break;
                 
@@ -284,10 +291,11 @@ class WhatsAppService
                     strpos($ultimaMensagem, 'quando posso') !== false) {
                     $conversa->update(['stage' => 'agendamento']);
                     $lead->update(['status' => 'qualificado']);
-                    Log::info('Stage progress: interesse → agendamento', [
-                        'conversa_id' => $conversa->id,
-                        'reason' => 'Cliente solicitou agendamento'
-                    ]);
+                    Log::info('🎯 PROGRESSÃO DE STAGE: interesse → agendamento');
+                    Log::info('   └─ Conversa ID: ' . $conversa->id);
+                    Log::info('   └─ Motivo: Cliente solicitou agendamento');
+                    Log::info('   └─ Lead Status: qualificado ⭐');
+                    Log::info('   └─ Última mensagem: ' . substr($ultimaMensagem, 0, 50) . '...');
                 }
                 break;
                 
@@ -408,11 +416,16 @@ class WhatsAppService
             // Atualizar stage para apresentacao
             $conversa->update(['stage' => 'apresentacao']);
             
-            Log::info('Matching realizado - Imóveis encontrados', [
-                'lead_id' => $lead->id,
-                'properties_found' => $properties->count(),
-                'stage' => 'apresentacao'
-            ]);
+            Log::info('╔════════════════════════════════════════════════════════════════╗');
+            Log::info('║           🎉 IMÓVEIS ENCONTRADOS!                             ║');
+            Log::info('╚════════════════════════════════════════════════════════════════╝');
+            Log::info('🏠 Quantidade: ' . $properties->count() . ' imóveis');
+            Log::info('👤 Lead: ' . $lead->nome . ' (ID: ' . $lead->id . ')');
+            Log::info('💰 Orçamento: R$ ' . number_format($lead->budget_min ?? 0, 0, ',', '.') . ' - R$ ' . number_format($lead->budget_max ?? 0, 0, ',', '.'));
+            Log::info('📍 Localização: ' . ($lead->localizacao ?? 'N/A'));
+            Log::info('🛏️  Quartos: ' . ($lead->quartos ?? 'N/A'));
+            Log::info('🎯 Novo Stage: apresentacao');
+            Log::info('─────────────────────────────────────────────────────────────────');
         } else {
             // NENHUM IMÓVEL ENCONTRADO
             $mensagem = "😔 No momento não tenho imóveis disponíveis que se encaixem exatamente no que você procura.\n\n";
@@ -427,14 +440,16 @@ class WhatsAppService
             // Atualizar stage para sem_match
             $conversa->update(['stage' => 'sem_match']);
             
-            Log::info('Matching realizado - Nenhum imóvel encontrado', [
-                'lead_id' => $lead->id,
-                'budget_min' => $lead->budget_min,
-                'budget_max' => $lead->budget_max,
-                'localizacao' => $lead->localizacao,
-                'quartos' => $lead->quartos,
-                'stage' => 'sem_match'
-            ]);
+            Log::info('╔════════════════════════════════════════════════════════════════╗');
+            Log::info('║           😔 NENHUM IMÓVEL ENCONTRADO                         ║');
+            Log::info('╚════════════════════════════════════════════════════════════════╝');
+            Log::info('👤 Lead: ' . $lead->nome . ' (ID: ' . $lead->id . ')');
+            Log::info('💰 Orçamento buscado: R$ ' . number_format($lead->budget_min ?? 0, 0, ',', '.') . ' - R$ ' . number_format($lead->budget_max ?? 0, 0, ',', '.'));
+            Log::info('📍 Localização buscada: ' . ($lead->localizacao ?? 'N/A'));
+            Log::info('🛏️  Quartos buscados: ' . ($lead->quartos ?? 'N/A'));
+            Log::info('🎯 Novo Stage: sem_match');
+            Log::info('💡 Ação: Oferecendo refinamento de critérios');
+            Log::info('─────────────────────────────────────────────────────────────────');
         }
     }
     
@@ -536,15 +551,19 @@ class WhatsAppService
             }
         }
         
-        Log::info('Lead criado/atualizado com dados geográficos do WhatsApp', [
-            'lead_id' => $lead->id,
-            'nome' => $dados['profile_name'],
-            'telefone' => $telefone,
-            'city' => $dados['city'],
-            'state' => $dados['state'],
-            'coordinates' => $dados['latitude'] && $dados['longitude'] ? 
-                "{$dados['latitude']}, {$dados['longitude']}" : null
-        ]);
+        Log::info('╔════════════════════════════════════════════════════════════════╗');
+        Log::info('║           ' . ($lead->wasRecentlyCreated ? '🆕 LEAD CRIADO' : '🔄 LEAD ATUALIZADO') . '                               ║');
+        Log::info('╚════════════════════════════════════════════════════════════════╝');
+        Log::info('🆔 Lead ID: ' . $lead->id);
+        Log::info('👤 Nome: ' . ($dados['profile_name'] ?? 'N/A'));
+        Log::info('📱 Telefone: ' . $telefone);
+        Log::info('🏙️  Cidade: ' . ($dados['city'] ?? 'N/A'));
+        Log::info('🗺️  Estado: ' . ($dados['state'] ?? 'N/A'));
+        if ($dados['latitude'] && $dados['longitude']) {
+            Log::info('📌 GPS: ' . $dados['latitude'] . ', ' . $dados['longitude']);
+        }
+        Log::info('🎯 Status: ' . $lead->status);
+        Log::info('─────────────────────────────────────────────────────────────────');
         
         return $lead;
     }
