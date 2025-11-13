@@ -35,14 +35,14 @@ RUN chmod -R 775 /var/www/html/storage
 # Habilitar mod_rewrite do Apache
 RUN a2enmod rewrite
 
+# Configurar Apache para usar porta 8080 ANTES de copiar o apache.conf
+RUN sed -i 's/Listen 80/Listen 8080/g' /etc/apache2/ports.conf
+
 # Copiar configuração do Apache
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 
 # Expor porta 8080 (Render usa essa porta)
 EXPOSE 8080
-
-# Configurar Apache para usar porta 8080
-RUN sed -i 's/80/8080/g' /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
 
 # Iniciar Apache
 CMD ["apache2-foreground"]
