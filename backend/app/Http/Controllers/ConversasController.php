@@ -43,6 +43,20 @@ class ConversasController extends Controller
             
             $conversas = $query->orderBy('conversas.ultima_atividade', 'desc')->get();
             
+            // Formatar datas para ISO8601 (compatível com JavaScript)
+            $conversas = $conversas->map(function($conversa) {
+                if ($conversa->iniciada_em) {
+                    $conversa->iniciada_em = date('c', strtotime($conversa->iniciada_em));
+                }
+                if ($conversa->ultima_atividade) {
+                    $conversa->ultima_atividade = date('c', strtotime($conversa->ultima_atividade));
+                }
+                if ($conversa->finalizada_em) {
+                    $conversa->finalizada_em = date('c', strtotime($conversa->finalizada_em));
+                }
+                return $conversa;
+            });
+            
             return response()->json([
                 'success' => true,
                 'data' => $conversas
