@@ -13,7 +13,7 @@ class Kernel extends ConsoleKernel
      * @var array
      */
     protected $commands = [
-        //
+        Commands\SyncProperties::class,
     ];
 
     /**
@@ -24,6 +24,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        //
+        // Sincronizar imóveis a cada 4 horas
+        $schedule->command('properties:sync')
+            ->everyFourHours()
+            ->withoutOverlapping()
+            ->runInBackground();
     }
 }

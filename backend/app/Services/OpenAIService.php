@@ -136,7 +136,11 @@ Seu objetivo é:
 - Coletar informações sobre: orçamento, localização preferida, quantidade de quartos, características desejadas
 - Manter o tom conversacional e amigável
 
-IMPORTANTE: Suas respostas devem ser curtas e diretas (máximo 3 linhas).";
+IMPORTANTE: 
+- Suas respostas devem ser curtas e diretas (máximo 3 linhas)
+- Se NÃO souber responder algo ou a pergunta estiver fora do contexto imobiliário, responda EXATAMENTE: 'Vou encaminhar sua dúvida para um dos nossos corretores especializados. Em breve entraremos em contato! 📱'
+- Não invente informações sobre imóveis, preços ou disponibilidade
+- Para questões técnicas, jurídicas ou muito específicas, sempre indique que o corretor entrará em contato";
 
         $userPrompt = ($context ? "Contexto anterior:\n$context\n\n" : "") . "Cliente: $message\n\nResponda:";
         
