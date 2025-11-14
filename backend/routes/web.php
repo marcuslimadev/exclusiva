@@ -377,7 +377,8 @@ $router->get('/debug/add-columns', function () {
             'area_terreno' => 'ALTER TABLE imo_properties ADD COLUMN area_terreno DECIMAL(10,2)',
             'caracteristicas' => 'ALTER TABLE imo_properties ADD COLUMN caracteristicas JSON',
             'imagens' => 'ALTER TABLE imo_properties ADD COLUMN imagens JSON',
-            'exclusividade' => 'ALTER TABLE imo_properties ADD COLUMN exclusividade BOOLEAN DEFAULT FALSE'
+            'exclusividade' => 'ALTER TABLE imo_properties ADD COLUMN exclusividade BOOLEAN DEFAULT FALSE',
+            'api_data' => 'ALTER TABLE imo_properties ADD COLUMN api_data JSON'
         ];
         
         foreach ($columns as $columnName => $sql) {
