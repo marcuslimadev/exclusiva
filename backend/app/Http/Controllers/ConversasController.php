@@ -78,6 +78,8 @@ class ConversasController extends Controller
         try {
             $db = app('db');
             
+            \Log::info("Buscando conversa ID: {$id}");
+            
             // Buscar conversa com dados do lead
             $conversa = $db->table('conversas')
                 ->leftJoin('leads', 'conversas.lead_id', '=', 'leads.id')
@@ -93,17 +95,40 @@ class ConversasController extends Controller
                 ->first();
             
             if (!$conversa) {
+                \Log::warning("Conversa {$id} não encontrada");
                 return response()->json([
                     'success' => false,
                     'error' => 'Conversa não encontrada'
                 ], 404);
             }
             
+            \Log::info("Conversa encontrada, buscando mensagens...");
+            
             // Buscar mensagens
             $mensagens = $db->table('mensagens')
                 ->where('conversa_id', $id)
                 ->orderBy('sent_at', 'asc')
                 ->get();
+            
+            \Log::info("Encontradas " . count($mensagens) . " mensagens");
+            
+            // Formatar mensagens para garantir campos corretos
+            $mensagens = $mensagens->map(function($msg) {
+                return [
+                    'id' => $msg->id,
+                    'conversa_id' => $msg->conversa_id,
+                    'message_sid' => $msg->message_sid ?? null,
+                    'direction' => $msg->direction,
+                    'message_type' => $msg->message_type,
+                    'content' => $msg->content ?? '',
+                    'media_url' => $msg->media_url ?? null,
+                    'transcription' => $msg->transcription ?? null,
+                    'status' => $msg->status ?? 'sent',
+                    'sent_at' => $msg->sent_at,
+                    'read_at' => $msg->read_at ?? null,
+                    'created_at' => $msg->created_at ?? null
+                ];
+            });
             
             // Marcar mensagens como lidas
             $db->table('mensagens')
@@ -112,16 +137,25 @@ class ConversasController extends Controller
                 ->whereNull('read_at')
                 ->update(['read_at' => date('Y-m-d H:i:s')]);
             
-            $conversa->mensagens = $mensagens;
+            \Log::info("Mensagens marcadas como lidas");
+            
+            // Converter conversa para array e adicionar mensagens
+            $conversaArray = (array) $conversa;
+            $conversaArray['mensagens'] = $mensagens->toArray();
             
             return response()->json([
                 'success' => true,
-                'data' => $conversa
+                'data' => $conversaArray
             ]);
         } catch (\Exception $e) {
+            \Log::error("Erro ao buscar conversa {$id}: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null
             ], 500);
         }
     }
