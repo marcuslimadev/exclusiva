@@ -331,22 +331,12 @@
               
               <!-- Description -->
               <div v-if="imovelSelecionado.descricao" class="mb-6">
-                <div class="flex items-center justify-between mb-3">
-                  <h3 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-info-circle mr-2"></i>Descrição
-                  </h3>
-                  <button 
-                    @click="formatarDescricao"
-                    :disabled="formatandoTexto"
-                    class="bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2"
-                  >
-                    <i :class="formatandoTexto ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>
-                    {{ formatandoTexto ? 'Formatando...' : 'Melhorar com IA' }}
-                  </button>
-                </div>
+                <h3 class="text-xl font-bold text-gray-800 mb-3">
+                  <i class="fas fa-info-circle mr-2"></i>Descrição
+                </h3>
                 <div class="bg-gray-50 rounded-xl p-4">
                   <p class="text-gray-700 leading-relaxed whitespace-pre-line">
-                    {{ descricaoFormatada || imovelSelecionado.descricao }}
+                    {{ imovelSelecionado.descricao }}
                   </p>
                 </div>
               </div>
@@ -401,8 +391,6 @@ const loading = ref(true)
 const modalAberto = ref(false)
 const imovelSelecionado = ref({})
 const slideshowAtual = ref(0)
-const formatandoTexto = ref(false)
-const descricaoFormatada = ref('')
 const filters = ref({
   search: '',
   tipo: '',
@@ -499,7 +487,6 @@ const formatarPreco = (valor) => {
 const abrirModal = (imovel) => {
   imovelSelecionado.value = imovel
   slideshowAtual.value = 0  // Reset slideshow
-  descricaoFormatada.value = '' // Reset descrição formatada
   modalAberto.value = true
   document.body.style.overflow = 'hidden'
 }
@@ -507,30 +494,7 @@ const abrirModal = (imovel) => {
 const fecharModal = () => {
   modalAberto.value = false
   slideshowAtual.value = 0  // Reset slideshow
-  descricaoFormatada.value = '' // Reset descrição formatada
   document.body.style.overflow = 'auto'
-}
-
-const formatarDescricao = async () => {
-  if (!imovelSelecionado.value.descricao || formatandoTexto.value) return
-  
-  try {
-    formatandoTexto.value = true
-    const response = await api.post('/api/format-text', {
-      text: imovelSelecionado.value.descricao
-    })
-    
-    if (response.data.success) {
-      descricaoFormatada.value = response.data.data.formatted
-    } else {
-      alert('Erro ao formatar texto: ' + response.data.error)
-    }
-  } catch (error) {
-    console.error('Erro ao formatar descrição:', error)
-    alert('Erro ao formatar texto. Tente novamente.')
-  } finally {
-    formatandoTexto.value = false
-  }
 }
 
 const navegarSlideshow = (direcao) => {
