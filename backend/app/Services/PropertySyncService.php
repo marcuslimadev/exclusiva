@@ -151,16 +151,21 @@ class PropertySyncService
      */
     private function mapPropertyData($imovel)
     {
-        // Converter áreas
-        $areaPrivativa = $this->parseArea($imovel['area']['privativa']['valor'] ?? null);
-        $areaTotal = $this->parseArea($imovel['area']['total']['valor'] ?? null);
-        $areaTerreno = $this->parseArea($imovel['area']['terreno']['valor'] ?? null);
+        // Converter áreas - nova estrutura da API
+        $areaPrivativa = isset($imovel['area']['privativa']['valor']) ? 
+            $this->parseArea($imovel['area']['privativa']['valor']) : null;
+        $areaTotal = isset($imovel['area']['total']['valor']) ? 
+            $this->parseArea($imovel['area']['total']['valor']) : null;
+        $areaTerreno = isset($imovel['area']['terreno']['valor']) ? 
+            $this->parseArea($imovel['area']['terreno']['valor']) : null;
         
-        // Características
+        // Características - agora pode ser array vazio
         $caracteristicas = [];
-        if (!empty($imovel['caracteristicas'])) {
+        if (!empty($imovel['caracteristicas']) && is_array($imovel['caracteristicas'])) {
             foreach ($imovel['caracteristicas'] as $carac) {
-                if (isset($carac['nomeCaracteristica'])) {
+                if (is_string($carac)) {
+                    $caracteristicas[] = $carac;
+                } elseif (isset($carac['nomeCaracteristica'])) {
                     $caracteristicas[] = $carac['nomeCaracteristica'];
                 }
             }
@@ -169,14 +174,14 @@ class PropertySyncService
         // Imagem destaque
         $imagemDestaque = $this->getImagemDestaque($imovel['imagens'] ?? []);
         
-        // Preparar dados de imagens
+        // Preparar dados de imagens - formato completo
         $imagensData = [];
         if (!empty($imovel['imagens']) && is_array($imovel['imagens'])) {
             foreach ($imovel['imagens'] as $img) {
                 if (isset($img['url'])) {
                     $imagensData[] = [
                         'url' => $img['url'],
-                        'destaque' => $img['destaque'] ?? false
+                        'destaque' => isset($img['destaque']) ? (bool)$img['destaque'] : false
                     ];
                 }
             }
@@ -188,13 +193,13 @@ class PropertySyncService
             'finalidade_imovel' => $imovel['finalidadeImovel'] ?? null,
             'tipo_imovel' => $imovel['descricaoTipoImovel'] ?? null,
             'descricao' => $imovel['descricaoImovel'] ?? null,
-            'dormitorios' => $imovel['dormitorios'] ?? 0,
-            'suites' => $imovel['suites'] ?? 0,
-            'banheiros' => $imovel['banheiros'] ?? 0,
-            'garagem' => $imovel['garagem'] ?? 0,
-            'valor_venda' => $imovel['valorEsperado'] ?? null,
-            'valor_iptu' => $imovel['valorIPTU'] ?? null,
-            'valor_condominio' => $imovel['valorCondominio'] ?? null,
+            'dormitorios' => intval($imovel['dormitorios'] ?? 0),
+            'suites' => intval($imovel['suites'] ?? 0),
+            'banheiros' => intval($imovel['banheiros'] ?? 0),
+            'garagem' => intval($imovel['garagem'] ?? 0),
+            'valor_venda' => $imovel['valorEsperado'] ?? 0,
+            'valor_iptu' => $imovel['valorIPTU'] ?? 0,
+            'valor_condominio' => $imovel['valorCondominio'] ?? 0,
             'cidade' => $imovel['endereco']['cidade'] ?? null,
             'estado' => $imovel['endereco']['estado'] ?? null,
             'bairro' => $imovel['endereco']['bairro'] ?? null,
@@ -206,12 +211,12 @@ class PropertySyncService
             'area_total' => $areaTotal,
             'area_terreno' => $areaTerreno,
             'imagem_destaque' => $imagemDestaque,
-            'imagens' => json_encode($imagensData), // Garantir que seja JSON
+            'imagens' => json_encode($imagensData),
             'caracteristicas' => json_encode($caracteristicas),
-            'em_condominio' => $imovel['emCondominio'] ? 1 : 0,
-            'exclusividade' => $imovel['exclusividade'] ? 1 : 0,
-            'exibir_imovel' => $imovel['exibirImovel'] ? 1 : 0,
-            'active' => $imovel['exibirImovel'] ? 1 : 0,
+            'em_condominio' => isset($imovel['emCondominio']) ? ($imovel['emCondominio'] ? 1 : 0) : 0,
+            'exclusividade' => isset($imovel['exclusividade']) ? ($imovel['exclusividade'] ? 1 : 0) : 0,
+            'exibir_imovel' => isset($imovel['exibirImovel']) ? ($imovel['exibirImovel'] ? 1 : 0) : 1,
+            'active' => isset($imovel['exibirImovel']) ? ($imovel['exibirImovel'] ? 1 : 0) : 1,
             'api_data' => json_encode($imovel)
         ];
     }

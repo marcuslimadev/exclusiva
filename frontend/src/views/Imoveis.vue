@@ -207,9 +207,72 @@
               <i class="fas fa-times text-2xl text-gray-700"></i>
             </button>
             
-            <!-- Image -->
+            <!-- Image Slideshow -->
             <div class="relative h-96 bg-gray-200">
+              <!-- Slideshow Container -->
+              <div 
+                v-if="imovelSelecionado.imagens && imovelSelecionado.imagens.length > 0"
+                class="relative h-full overflow-hidden"
+              >
+                <div 
+                  v-for="(imagem, index) in imovelSelecionado.imagens" 
+                  :key="index"
+                  :class="{'opacity-100': slideshowAtual === index, 'opacity-0': slideshowAtual !== index}"
+                  class="absolute inset-0 transition-opacity duration-500"
+                >
+                  <img 
+                    :src="imagem.url || 'https://via.placeholder.com/800x600?text=Imóvel'" 
+                    :alt="`${imovelSelecionado.tipo_imovel} - Imagem ${index + 1}`"
+                    class="w-full h-full object-cover"
+                  >
+                </div>
+                
+                <!-- Navigation Arrows -->
+                <button 
+                  v-if="imovelSelecionado.imagens.length > 1"
+                  @click="navegarSlideshow('prev')"
+                  class="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-12 h-12 rounded-full flex items-center justify-center transition z-10"
+                >
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                
+                <button 
+                  v-if="imovelSelecionado.imagens.length > 1"
+                  @click="navegarSlideshow('next')"
+                  class="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-12 h-12 rounded-full flex items-center justify-center transition z-10"
+                >
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                
+                <!-- Image Indicators -->
+                <div 
+                  v-if="imovelSelecionado.imagens.length > 1"
+                  class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2"
+                >
+                  <button
+                    v-for="(imagem, index) in imovelSelecionado.imagens"
+                    :key="index"
+                    @click="slideshowAtual = index"
+                    :class="{
+                      'bg-white': slideshowAtual === index,
+                      'bg-white/50': slideshowAtual !== index
+                    }"
+                    class="w-3 h-3 rounded-full transition"
+                  ></button>
+                </div>
+                
+                <!-- Image Counter -->
+                <div 
+                  v-if="imovelSelecionado.imagens.length > 1"
+                  class="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium"
+                >
+                  {{ slideshowAtual + 1 }} / {{ imovelSelecionado.imagens.length }}
+                </div>
+              </div>
+              
+              <!-- Fallback Single Image -->
               <img 
+                v-else
                 :src="imovelSelecionado.imagem_destaque || 'https://via.placeholder.com/800x600?text=Imóvel'" 
                 :alt="imovelSelecionado.tipo_imovel"
                 class="w-full h-full object-cover"
@@ -325,6 +388,7 @@ const imoveis = ref([])
 const loading = ref(true)
 const modalAberto = ref(false)
 const imovelSelecionado = ref({})
+const slideshowAtual = ref(0)
 const filters = ref({
   search: '',
   tipo: '',
@@ -396,13 +460,26 @@ const formatarPreco = (valor) => {
 
 const abrirModal = (imovel) => {
   imovelSelecionado.value = imovel
+  slideshowAtual.value = 0  // Reset slideshow
   modalAberto.value = true
   document.body.style.overflow = 'hidden'
 }
 
 const fecharModal = () => {
   modalAberto.value = false
+  slideshowAtual.value = 0  // Reset slideshow
   document.body.style.overflow = 'auto'
+}
+
+const navegarSlideshow = (direcao) => {
+  const totalImagens = imovelSelecionado.value.imagens?.length || 0
+  if (totalImagens <= 1) return
+  
+  if (direcao === 'next') {
+    slideshowAtual.value = (slideshowAtual.value + 1) % totalImagens
+  } else {
+    slideshowAtual.value = slideshowAtual.value === 0 ? totalImagens - 1 : slideshowAtual.value - 1
+  }
 }
 
 const abrirWhatsApp = (imovel = null) => {
