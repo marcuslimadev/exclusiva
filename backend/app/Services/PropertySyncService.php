@@ -47,12 +47,17 @@ class PropertySyncService
             do {
                 Log::info("📄 Buscando página {$page}...");
                 
-                // Buscar lista de imóveis (com paginação) - usando POST
-                $lista = $this->callApiPost("/lista", [
-                    'pagina' => $page,
-                    'limite' => 50, // Máximo por página
-                    'status' => 'ativos'
-                ]);
+                // Buscar lista de imóveis (com paginação) - tentando GET primeiro
+                try {
+                    $lista = $this->callApi("/lista");
+                } catch (\Exception $e) {
+                    // Se falhar, tentar POST
+                    Log::info("GET /lista falhou, tentando POST...");
+                    $lista = $this->callApiPost("/lista", [
+                        'pagina' => $page,
+                        'limite' => 50
+                    ]);
+                }
                 
                 if (!isset($lista['resultSet']['data'])) {
                     throw new \Exception('Resposta da API inválida: estrutura esperada não encontrada');
