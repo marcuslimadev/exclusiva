@@ -47,8 +47,12 @@ class PropertySyncService
             do {
                 Log::info("📄 Buscando página {$page}...");
                 
-                // Buscar lista de imóveis (com paginação)
-                $lista = $this->callApi("/lista?page={$page}");
+                // Buscar lista de imóveis (com paginação) - usando POST
+                $lista = $this->callApiPost("/lista", [
+                    'pagina' => $page,
+                    'limite' => 50, // Máximo por página
+                    'status' => 'ativos'
+                ]);
                 
                 if (!isset($lista['resultSet']['data'])) {
                     throw new \Exception('Resposta da API inválida: estrutura esperada não encontrada');
@@ -59,9 +63,9 @@ class PropertySyncService
                 $totalPages = $resultSet['total_pages'] ?? 1;
                 $totalItems = $resultSet['total_items'] ?? 0;
                 
-                Log::info("📊 Página {$page}/{$totalPages} - {count($imoveis)} imóveis", [
+                Log::info("📊 Página {$page}/{$totalPages} - " . count($imoveis) . " imóveis", [
                     'total_items' => $totalItems,
-                    'per_page' => $resultSet['per_page'] ?? 20
+                    'per_page' => $resultSet['per_page'] ?? 50
                 ]);
                 
                 $stats['found'] += count($imoveis);
@@ -75,7 +79,7 @@ class PropertySyncService
                     }
                     
                     try {
-                        // Buscar dados completos do imóvel
+                        // Buscar dados completos do imóvel (GET ainda funciona)
                         $response = $this->callApi("/dados/{$codigo}");
                         
                         if (!isset($response['resultSet'])) {
@@ -239,9 +243,7 @@ class PropertySyncService
      */
     private function callApi($endpoint)
     {
-        // Adicionar token como query parameter
-        $separator = strpos($endpoint, '?') !== false ? '&' : '?';
-        $url = $this->baseUrl . $endpoint . $separator . 'token=' . urlencode($this->apiToken);
+        $url = $this->baseUrl . $endpoint;
         
         Log::debug("API Call URL: {$url}");
         Log::debug("Token usado: " . substr($this->apiToken, 0, 10) . '...');
@@ -254,11 +256,13 @@ class PropertySyncService
             CURLOPT_CUSTOMREQUEST => 'GET',
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
+                'token: ' . $this->apiToken,
                 'User-Agent: ExclusivaLar-CRM/1.0'
             ],
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 20
         ]);
         
         $response = curl_exec($ch);
@@ -267,6 +271,62 @@ class PropertySyncService
         curl_close($ch);
         
         Log::debug("API Response: HTTP {$httpCode}", [
+            'response_length' => strlen($response),
+            'has_error' => !empty($error),
+            'response_preview' => substr($response, 0, 200)
+        ]);
+        
+        if ($httpCode !== 200) {
+            throw new \Exception("API retornou HTTP {$httpCode}: {$response}");
+        }
+        
+        if ($error) {
+            throw new \Exception("Erro cURL: {$error}");
+        }
+        
+        $data = json_decode($response, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception('Resposta JSON inválida: ' . json_last_error_msg());
+        }
+        
+        return $data;
+    }
+    
+    /**
+     * Fazer chamada POST à API da Exclusiva Lar
+     */
+    private function callApiPost($endpoint, $postData = [])
+    {
+        $url = $this->baseUrl . $endpoint;
+        
+        Log::debug("API POST URL: {$url}");
+        Log::debug("POST Data: " . json_encode($postData));
+        
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($postData),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'token: ' . $this->apiToken,
+                'User-Agent: ExclusivaLar-CRM/1.0'
+            ],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 20
+        ]);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        Log::debug("API POST Response: HTTP {$httpCode}", [
             'response_length' => strlen($response),
             'has_error' => !empty($error),
             'response_preview' => substr($response, 0, 200)
