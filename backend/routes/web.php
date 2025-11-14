@@ -367,7 +367,27 @@ $router->get('/debug/config', function () {
                 'sql' => $decodedSql ?? $sql
             ], 500);
         }
-    });// Run migrations (TEMPORÁRIO)
+    });
+
+// Contar imóveis (TEMPORÁRIO)
+$router->get('/debug/count-properties', function () {
+    try {
+        $db = app('db');
+        $total = $db->table('imo_properties')->count();
+        $ativos = $db->table('imo_properties')->where('active', 1)->where('exibir_imovel', 1)->count();
+        
+        return response()->json([
+            'total' => $total,
+            'ativos' => $ativos,
+            'success' => true
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'success' => false
+        ], 500);
+    }
+});// Run migrations (TEMPORÁRIO)
 $router->get('/debug/migrate', function () {
     try {
         \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
