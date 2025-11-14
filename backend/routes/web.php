@@ -201,6 +201,10 @@ $router->get('/debug/conversa/{id}', function ($id) {
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
 $router->group(['prefix' => 'api/properties'], function () use ($router) {
+    // Rotas específicas ANTES das dinâmicas
+    $router->get('/sync', 'PropertyController@sync');
+    
+    // Rotas dinâmicas
     $router->get('/', 'PublicPropertyController@index');
     $router->get('/{codigo}', 'PublicPropertyController@show');
 });
@@ -247,7 +251,4 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('/conversas/tempo-real', 'ConversasController@tempoReal');
     $router->get('/conversas/{id}', 'ConversasController@show');
     $router->post('/conversas/{id}/mensagens', 'ConversasController@sendMessage');
-    
-    // Properties
-    $router->get('/properties/sync', 'PropertyController@sync');
 });
