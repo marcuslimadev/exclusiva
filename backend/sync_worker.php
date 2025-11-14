@@ -60,15 +60,14 @@ function call_api_get($url)
 function upsert_basico($row)
 {
     $data = [
-        'codigo' => $row['codigoImovel'],
-        'referencia' => $row['referenciaImovel'] ?? null,
-        'atualizado_em' => $row['ultimaAtualizacaoImovel'] ?? null,
-        'cadastrado_em' => $row['dataInsercaoImovel'] ?? null,
-        'status_ativo' => ($row['statusImovel'] ?? false) ? 1 : 0,
+        'codigo_imovel' => $row['codigoImovel'],
+        'referencia_imovel' => $row['referenciaImovel'] ?? null,
+        'active' => ($row['statusImovel'] ?? false) ? 1 : 0,
+        'updated_at' => now(),
     ];
     
-    DB::table('imoveis')->updateOrInsert(
-        ['codigo' => $data['codigo']],
+    DB::table('imo_properties')->updateOrInsert(
+        ['codigo_imovel' => $data['codigo_imovel']],
         $data
     );
 }
@@ -119,14 +118,16 @@ echo "════════════════════════�
 echo "\n📝 FASE 2: Buscando detalhes dos imóveis...\n";
 echo "════════════════════════════════════════════════════════════════\n";
 
-$ids = DB::table('imoveis')
-    ->where(function($query) {
+$fourHoursAgo = date('Y-m-d H:i:s', strtotime('-4 hours'));
+
+$ids = DB::table('imo_properties')
+    ->where(function($query) use ($fourHoursAgo) {
         $query->whereNull('descricao')
               ->orWhereNull('cidade')
-              ->orWhere('atualizado_em', '<', now()->subHours(4));
+              ->orWhere('updated_at', '<', $fourHoursAgo);
     })
-    ->orderByRaw('atualizado_em ASC NULLS FIRST')
-    ->pluck('codigo')
+    ->orderBy('updated_at', 'asc')
+    ->pluck('codigo_imovel')
     ->toArray();
 
 echo "   ℹ️  Total de imóveis para atualizar: " . count($ids) . "\n\n";
@@ -185,64 +186,71 @@ function upsert_detalhes($d)
     
     $codigo = $d['codigoImovel'];
     
+    // Determinar valores (venda/aluguel baseado na finalidade)
+    $valor_venda = null;
+    $valor_aluguel = null;
+    $finalidade = strtolower($d['finalidadeImovel'] ?? '');
+    
+    if (strpos($finalidade, 'venda') !== false) {
+        $valor_venda = $d['valorEsperado'] ?? null;
+    } elseif (strpos($finalidade, 'aluguel') !== false || strpos($finalidade, 'locação') !== false) {
+        $valor_aluguel = $d['valorEsperado'] ?? null;
+    }
+    
+    // Coletar imagens em array JSON
+    $imagens = [];
+    $imagem_destaque = null;
+    if (!empty($d['imagens'])) {
+        foreach ($d['imagens'] as $img) {
+            $imagens[] = $img['url'];
+            if (($img['destaque'] ?? false) && !$imagem_destaque) {
+                $imagem_destaque = $img['url'];
+            }
+        }
+    }
+    
+    // Coletar características em array JSON
+    $caracteristicas = [];
+    if (!empty($d['caracteristicas'])) {
+        foreach ($d['caracteristicas'] as $c) {
+            $caracteristicas[] = $c['nomeCaracteristica'];
+        }
+    }
+    
     // Atualizar dados principais
-    DB::table('imoveis')
-        ->where('codigo', $codigo)
+    DB::table('imo_properties')
+        ->where('codigo_imovel', $codigo)
         ->update([
-            'finalidade' => $d['finalidadeImovel'] ?? null,
-            'tipo' => $d['descricaoTipoImovel'] ?? null,
+            'finalidade_imovel' => $d['finalidadeImovel'] ?? null,
+            'tipo_imovel' => $d['descricaoTipoImovel'] ?? null,
             'dormitorios' => $d['dormitorios'] ?? 0,
             'suites' => $d['suites'] ?? 0,
             'banheiros' => $d['banheiros'] ?? 0,
-            'salas' => $d['salas'] ?? 0,
             'garagem' => $d['garagem'] ?? 0,
-            'acomodacoes' => $d['acomodacoes'] ?? 0,
-            'ano_construcao' => $d['anoConstrucao'] ?? null,
-            'valor' => $d['valorEsperado'] ?? null,
+            'valor_venda' => $valor_venda,
+            'valor_aluguel' => $valor_aluguel,
+            'valor_iptu' => $d['valorIPTU'] ?? null,
+            'valor_condominio' => $d['valorCondominio'] ?? null,
             'cidade' => $d['endereco']['cidade'] ?? null,
             'estado' => $d['endereco']['estado'] ?? null,
             'bairro' => $d['endereco']['bairro'] ?? null,
             'logradouro' => $d['endereco']['logradouro'] ?? null,
             'numero' => $d['endereco']['numero'] ?? null,
+            'complemento' => $d['endereco']['complemento'] ?? null,
             'cep' => $d['endereco']['cep'] ?? null,
             'area_privativa' => $area_privativa,
             'area_total' => $area_total,
-            'terreno' => $area_terreno,
+            'area_terreno' => $area_terreno,
             'descricao' => $d['descricaoImovel'] ?? null,
-            'atualizado_em' => $d['atualizadoEm'] ?? date('Y-m-d H:i:s'),
+            'imagem_destaque' => $imagem_destaque,
+            'imagens' => json_encode($imagens),
+            'caracteristicas' => json_encode($caracteristicas),
+            'em_condominio' => ($d['emCondominio'] ?? false) ? 1 : 0,
+            'exclusividade' => ($d['exclusividade'] ?? false) ? 1 : 0,
+            'exibir_imovel' => ($d['exibirImovel'] ?? false) ? 1 : 0,
+            'api_data' => json_encode($d),
+            'updated_at' => date('Y-m-d H:i:s'),
         ]);
-    
-    // Atualizar imagens
-    DB::table('imoveis_imagens')->where('codigo', $codigo)->delete();
-    if (!empty($d['imagens'])) {
-        foreach ($d['imagens'] as $img) {
-            $url = $img['url'] ?? null;
-            $dest = ($img['destaque'] ?? false) ? 1 : 0;
-            if ($url) {
-                DB::table('imoveis_imagens')->insert([
-                    'codigo' => $codigo,
-                    'url' => $url,
-                    'destaque' => $dest,
-                ]);
-            }
-        }
-    }
-    
-    // Atualizar características
-    DB::table('imoveis_caracteristicas')->where('codigo', $codigo)->delete();
-    if (!empty($d['caracteristicas'])) {
-        foreach ($d['caracteristicas'] as $c) {
-            $g = $c['nomeGrupo'] ?? null;
-            $n = $c['nomeCaracteristica'] ?? null;
-            if ($n) {
-                DB::table('imoveis_caracteristicas')->insert([
-                    'codigo' => $codigo,
-                    'grupo' => $g,
-                    'nome' => $n,
-                ]);
-            }
-        }
-    }
 }
 
 echo "\n🎉 SINCRONIZAÇÃO COMPLETA!\n";
