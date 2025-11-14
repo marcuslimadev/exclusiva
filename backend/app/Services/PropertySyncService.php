@@ -239,7 +239,11 @@ class PropertySyncService
      */
     private function callApi($endpoint)
     {
-        $url = $this->baseUrl . $endpoint;
+        // Adicionar token como query parameter
+        $separator = strpos($endpoint, '?') !== false ? '&' : '?';
+        $url = $this->baseUrl . $endpoint . $separator . 'token=' . urlencode($this->apiToken);
+        
+        Log::debug("API Call: {$url}");
         
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -249,14 +253,22 @@ class PropertySyncService
             CURLOPT_CUSTOMREQUEST => 'GET',
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',
-                "token: {$this->apiToken}"
+                'User-Agent: ExclusivaLar-CRM/1.0'
             ],
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_FOLLOWLOCATION => true,
         ]);
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
+        
+        Log::debug("API Response: HTTP {$httpCode}", [
+            'response_length' => strlen($response),
+            'has_error' => !empty($error)
+        ]);
         
         if ($httpCode !== 200) {
             throw new \Exception("API retornou HTTP {$httpCode}: {$response}");
