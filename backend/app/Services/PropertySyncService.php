@@ -198,9 +198,8 @@ class PropertySyncService
             'banheiros' => intval($imovel['banheiros'] ?? 0),
             'garagem' => intval($imovel['garagem'] ?? 0),
             'valor_venda' => $imovel['valorEsperado'] ?? 0,
-            // Removidos temporariamente - não existem na produção
-            // 'valor_iptu' => $imovel['valorIPTU'] ?? 0,
-            // 'valor_condominio' => $imovel['valorCondominio'] ?? 0,
+            'valor_iptu' => $imovel['valorIPTU'] ?? 0,
+            'valor_condominio' => $imovel['valorCondominio'] ?? 0,
             'cidade' => $imovel['endereco']['cidade'] ?? null,
             'estado' => $imovel['endereco']['estado'] ?? null,
             'bairro' => $imovel['endereco']['bairro'] ?? null,

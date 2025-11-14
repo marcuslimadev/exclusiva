@@ -138,7 +138,7 @@ Retorne APENAS um JSON válido sem explicações adicionais.";
         $propertiesContext = "";
         if (!empty($availableProperties)) {
             $propertiesContext = "\n\nIMÓVEIS DISPONÍVEIS NO BANCO DE DADOS:\n";
-            foreach (array_slice($availableProperties, 0, 10) as $prop) {
+            foreach ($availableProperties as $prop) {
                 $propertiesContext .= sprintf(
                     "- Código: %s | Tipo: %s | Bairro: %s | Valor: R$ %s | Quartos: %d\n",
                     $prop['codigo_imovel'] ?? 'N/A',

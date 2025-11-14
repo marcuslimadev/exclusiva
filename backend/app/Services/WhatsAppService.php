@@ -283,7 +283,6 @@ class WhatsAppService
         $properties = Property::where('active', true)
             ->where('exibir_imovel', true)
             ->select('codigo_imovel', 'tipo_imovel', 'bairro', 'cidade', 'valor_venda', 'dormitorios', 'suites', 'descricao')
-            ->limit(50)
             ->get()
             ->toArray();
         
