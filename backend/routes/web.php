@@ -339,6 +339,27 @@ $router->get('/debug/config', function () {
     ]);
 });
 
+// Run migrations (TEMPORÁRIO)
+$router->get('/debug/migrate', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Migrations executadas com sucesso',
+            'output' => $output
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+});
+
 // ===========================
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
