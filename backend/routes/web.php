@@ -328,18 +328,46 @@ $router->get('/debug/insert-property/{codigo}', function ($codigo) {
 
 // Debug configurações (TEMPORÁRIO)
 $router->get('/debug/config', function () {
-    return response()->json([
-        'app_env' => env('APP_ENV'),
-        'app_debug' => env('APP_DEBUG'),
-        'has_exclusiva_token' => !empty(env('EXCLUSIVA_API_TOKEN')),
-        'token_preview' => env('EXCLUSIVA_API_TOKEN') ? substr(env('EXCLUSIVA_API_TOKEN'), 0, 10) . '...' : 'NOT SET',
-        'has_openai_key' => !empty(env('OPENAI_API_KEY')),
-        'has_twilio_sid' => !empty(env('TWILIO_ACCOUNT_SID')),
-        'has_database_url' => !empty(env('DATABASE_URL'))
-    ]);
-});
+        return response()->json([
+            'app_env' => env('APP_ENV'),
+            'app_debug' => env('APP_DEBUG'),
+            'has_exclusiva_token' => !empty(env('EXCLUSIVA_API_TOKEN')),
+            'token_preview' => env('EXCLUSIVA_API_TOKEN') ? substr(env('EXCLUSIVA_API_TOKEN'), 0, 10) . '...' : 'NOT SET',
+            'has_openai_key' => !empty(env('OPENAI_API_KEY')),
+            'has_twilio_sid' => !empty(env('TWILIO_ACCOUNT_SID')),
+            'has_database_url' => !empty(env('DATABASE_URL'))
+        ]);
+    });
 
-// Run migrations (TEMPORÁRIO)
+    // SQL direto (TEMPORÁRIO)
+    $router->get('/debug/sql/{sql}', function ($sql) {
+        try {
+            $db = app('db');
+            $decodedSql = urldecode($sql);
+            
+            if (strpos(strtoupper($decodedSql), 'SELECT') === 0) {
+                $result = $db->select($decodedSql);
+                return response()->json([
+                    'success' => true,
+                    'sql' => $decodedSql,
+                    'result' => $result
+                ]);
+            } else {
+                $result = $db->statement($decodedSql);
+                return response()->json([
+                    'success' => true,
+                    'sql' => $decodedSql,
+                    'affected' => $result
+                ]);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'sql' => $decodedSql ?? $sql
+            ], 500);
+        }
+    });// Run migrations (TEMPORÁRIO)
 $router->get('/debug/migrate', function () {
     try {
         \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
