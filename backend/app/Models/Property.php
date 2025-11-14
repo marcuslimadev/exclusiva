@@ -20,8 +20,9 @@ class Property extends Model
         'garagem',
         'valor_venda',
         'valor_aluguel',
-        'valor_iptu',
-        'valor_condominio',
+        // Removidos temporariamente - não existem na produção
+        // 'valor_iptu',
+        // 'valor_condominio',
         'cidade',
         'estado',
         'bairro',
@@ -52,8 +53,9 @@ class Property extends Model
         'area_privativa' => 'decimal:2',
         'area_total' => 'decimal:2',
         'area_terreno' => 'decimal:2',
-        'valor_iptu' => 'decimal:2',
-        'valor_condominio' => 'decimal:2',
+        // Removidos temporariamente - não existem na produção
+        // 'valor_iptu' => 'decimal:2',
+        // 'valor_condominio' => 'decimal:2',
         'imagens' => 'array',
         'caracteristicas' => 'array',
         'api_data' => 'array',
