@@ -125,7 +125,29 @@
                     ? 'bg-green-600 text-white rounded-br-none' 
                     : 'bg-white text-gray-900 rounded-bl-none border border-gray-200'"
                 >
+                  <!-- Ícone de áudio se for message_type audio -->
+                  <div v-if="mensagem.message_type === 'audio'" class="flex items-center space-x-2 mb-2 pb-2 border-b" :class="mensagem.direction === 'outgoing' ? 'border-green-400' : 'border-gray-300'">
+                    <svg class="w-5 h-5" :class="mensagem.direction === 'outgoing' ? 'text-green-100' : 'text-blue-500'" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-xs font-semibold" :class="mensagem.direction === 'outgoing' ? 'text-green-100' : 'text-blue-600'">
+                      🎤 Áudio Transcrito
+                    </span>
+                  </div>
+                  
+                  <!-- Transcrição do áudio se existir -->
+                  <div v-if="mensagem.transcription" class="mb-2 p-2 rounded" :class="mensagem.direction === 'outgoing' ? 'bg-green-700 bg-opacity-50' : 'bg-blue-50'">
+                    <p class="text-xs font-medium mb-1" :class="mensagem.direction === 'outgoing' ? 'text-green-100' : 'text-gray-600'">
+                      Transcrição:
+                    </p>
+                    <p class="text-sm italic" :class="mensagem.direction === 'outgoing' ? 'text-white' : 'text-gray-800'">
+                      "{{ mensagem.transcription }}"
+                    </p>
+                  </div>
+                  
+                  <!-- Conteúdo da mensagem -->
                   <p class="text-sm whitespace-pre-wrap break-words">{{ mensagem.content }}</p>
+                  
                   <div class="flex items-center justify-end mt-1 space-x-1">
                     <span class="text-xs opacity-75">
                       {{ formatarHora(mensagem.sent_at) }}
