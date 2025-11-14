@@ -49,6 +49,44 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
+        // Se for requisição JSON/API, retornar erro em JSON
+        if ($request->expectsJson() || $request->is('api/*') || $request->is('debug/*')) {
+            $status = 500;
+            
+            if ($exception instanceof HttpException) {
+                $status = $exception->getStatusCode();
+            } elseif ($exception instanceof ModelNotFoundException) {
+                $status = 404;
+            } elseif ($exception instanceof ValidationException) {
+                $status = 422;
+            } elseif ($exception instanceof AuthorizationException) {
+                $status = 403;
+            }
+            
+            $response = [
+                'success' => false,
+                'error' => $exception->getMessage(),
+                'exception' => get_class($exception),
+                'status' => $status
+            ];
+            
+            // Adicionar trace se debug mode ativo
+            if (env('APP_DEBUG', false)) {
+                $response['file'] = $exception->getFile();
+                $response['line'] = $exception->getLine();
+                $response['trace'] = collect($exception->getTrace())->map(function ($trace) {
+                    return [
+                        'file' => $trace['file'] ?? null,
+                        'line' => $trace['line'] ?? null,
+                        'function' => $trace['function'] ?? null,
+                        'class' => $trace['class'] ?? null
+                    ];
+                })->take(10)->toArray();
+            }
+            
+            return response()->json($response, $status);
+        }
+        
         return parent::render($request, $exception);
     }
 }
