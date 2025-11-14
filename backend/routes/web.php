@@ -360,6 +360,57 @@ $router->get('/debug/migrate', function () {
     }
 });
 
+// Adicionar campos manualmente (TEMPORÁRIO)
+$router->get('/debug/add-columns', function () {
+    try {
+        $db = app('db');
+        $results = [];
+        
+        // Listar todas as colunas necessárias
+        $columns = [
+            'valor_iptu' => 'ALTER TABLE imo_properties ADD COLUMN valor_iptu DECIMAL(10,2) DEFAULT 0',
+            'valor_condominio' => 'ALTER TABLE imo_properties ADD COLUMN valor_condominio DECIMAL(10,2) DEFAULT 0',
+            'logradouro' => 'ALTER TABLE imo_properties ADD COLUMN logradouro VARCHAR(255)',
+            'numero' => 'ALTER TABLE imo_properties ADD COLUMN numero VARCHAR(50)',
+            'complemento' => 'ALTER TABLE imo_properties ADD COLUMN complemento VARCHAR(255)',
+            'cep' => 'ALTER TABLE imo_properties ADD COLUMN cep VARCHAR(20)',
+            'area_terreno' => 'ALTER TABLE imo_properties ADD COLUMN area_terreno DECIMAL(10,2)',
+            'caracteristicas' => 'ALTER TABLE imo_properties ADD COLUMN caracteristicas JSON',
+            'imagens' => 'ALTER TABLE imo_properties ADD COLUMN imagens JSON',
+            'exclusividade' => 'ALTER TABLE imo_properties ADD COLUMN exclusividade BOOLEAN DEFAULT FALSE'
+        ];
+        
+        foreach ($columns as $columnName => $sql) {
+            try {
+                // Verificar se coluna já existe
+                $exists = $db->select("SELECT column_name FROM information_schema.columns WHERE table_name='imo_properties' AND column_name=?", [$columnName]);
+                
+                if (empty($exists)) {
+                    $db->statement($sql);
+                    $results[$columnName] = 'ADDED';
+                } else {
+                    $results[$columnName] = 'EXISTS';
+                }
+            } catch (\Exception $e) {
+                $results[$columnName] = 'ERROR: ' . $e->getMessage();
+            }
+        }
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Campos processados',
+            'results' => $results
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+});
+
 // ===========================
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
