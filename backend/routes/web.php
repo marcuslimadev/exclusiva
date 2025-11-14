@@ -172,6 +172,31 @@ $router->get('/api-public/test-users', function () {
     }
 });
 
+// Debug conversa específica (TEMPORÁRIO)
+$router->get('/debug/conversa/{id}', function ($id) {
+    try {
+        $db = app('db');
+        
+        $conversa = $db->table('conversas')->where('id', $id)->first();
+        if (!$conversa) {
+            return response()->json(['error' => 'Conversa não encontrada', 'id' => $id], 404);
+        }
+        
+        $mensagens = $db->table('mensagens')->where('conversa_id', $id)->get();
+        
+        return response()->json([
+            'conversa' => $conversa,
+            'total_mensagens' => count($mensagens),
+            'mensagens_sample' => $mensagens->take(3)
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
+});
+
 // ===========================
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
