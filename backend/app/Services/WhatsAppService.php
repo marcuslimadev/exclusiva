@@ -26,11 +26,13 @@ class WhatsAppService
 {
     private $twilio;
     private $openai;
+    private $stageDetection;
     
-    public function __construct(TwilioService $twilio, OpenAIService $openai)
+    public function __construct(TwilioService $twilio, OpenAIService $openai, StageDetectionService $stageDetection)
     {
         $this->twilio = $twilio;
         $this->openai = $openai;
+        $this->stageDetection = $stageDetection;
     }
     
     /**
@@ -277,8 +279,34 @@ class WhatsAppService
         // Buscar histórico da conversa
         $historico = $this->getConversationHistory($conversa->id);
         
-        // Processar com IA (informando se veio de áudio)
-        $aiResponse = $this->openai->processMessage($message, $historico, $isFromAudio);
+        // BUSCAR IMÓVEIS DISPONÍVEIS para contexto da IA
+        $properties = Property::where('active', true)
+            ->where('exibir_imovel', true)
+            ->select('codigo_imovel', 'tipo_imovel', 'bairro', 'cidade', 'valor_venda', 'dormitorios', 'suites', 'descricao')
+            ->limit(50)
+            ->get()
+            ->toArray();
+        
+        Log::info("📊 Carregados " . count($properties) . " imóveis para contexto da IA");
+        
+        // DETECTAR PRÓXIMO STAGE BASEADO NA MENSAGEM
+        $newStage = $this->stageDetection->detectNextStage(
+            $conversa->stage,
+            $message,
+            ['history' => $historico]
+        );
+        
+        // Atualizar stage se mudou
+        if ($newStage !== $conversa->stage) {
+            Log::info("📊 Stage atualizado: {$conversa->stage} → {$newStage}");
+            $conversa->update(['stage' => $newStage]);
+            
+            // Adicionar contexto de transição para IA
+            $historico .= "\n\n[SYSTEM: Cliente avançou para stage: {$newStage}]";
+        }
+        
+        // Processar com IA (informando se veio de áudio + imóveis disponíveis)
+        $aiResponse = $this->openai->processMessage($message, $historico, $isFromAudio, $properties);
         
         Log::info('🤖 Resposta da IA', [
             'success' => $aiResponse['success'] ?? false,

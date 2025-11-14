@@ -125,13 +125,31 @@ Retorne APENAS um JSON válido sem explicações adicionais.";
      * @param string $message Mensagem do usuário
      * @param string $context Contexto da conversa
      * @param bool $isFromAudio Se a mensagem veio de transcrição de áudio
+     * @param array $availableProperties Imóveis disponíveis para consulta
      * @return array Resposta gerada
      */
-    public function processMessage($message, $context = '', $isFromAudio = false)
+    public function processMessage($message, $context = '', $isFromAudio = false, $availableProperties = [])
     {
         $audioInstruction = $isFromAudio 
             ? "\n- O cliente acabou de enviar um ÁUDIO que foi transcrito. Responda de forma natural, mostrando que você OUVIU e ENTENDEU o que ele disse. Use expressões como 'Entendi!', 'Certo!', 'Perfeito!' para confirmar que você ouviu." 
             : "";
+        
+        // Preparar contexto de imóveis disponíveis
+        $propertiesContext = "";
+        if (!empty($availableProperties)) {
+            $propertiesContext = "\n\nIMÓVEIS DISPONÍVEIS NO BANCO DE DADOS:\n";
+            foreach (array_slice($availableProperties, 0, 10) as $prop) {
+                $propertiesContext .= sprintf(
+                    "- Código: %s | Tipo: %s | Bairro: %s | Valor: R$ %s | Quartos: %d\n",
+                    $prop['codigo_imovel'] ?? 'N/A',
+                    $prop['tipo_imovel'] ?? 'N/A',
+                    $prop['bairro'] ?? 'N/A',
+                    number_format($prop['valor_venda'] ?? 0, 2, ',', '.'),
+                    $prop['dormitorios'] ?? 0
+                );
+            }
+            $propertiesContext .= "\nUSE ESTES DADOS REAIS para responder perguntas sobre imóveis específicos!";
+        }
         
         $systemPrompt = "Você é um atendente virtual da Exclusiva Lar Imóveis, uma imobiliária especializada.
         
@@ -140,9 +158,12 @@ Seu objetivo é:
 - Fazer perguntas para entender as necessidades do cliente
 - Coletar informações sobre: orçamento, localização preferida, quantidade de quartos, características desejadas
 - Manter o tom conversacional e amigável{$audioInstruction}
+{$propertiesContext}
 
 IMPORTANTE: 
 - Suas respostas devem ser curtas e diretas (máximo 3 linhas)
+- SEMPRE consulte os IMÓVEIS DISPONÍVEIS acima antes de dizer que não temos
+- Quando cliente mencionar código/referência de imóvel, BUSQUE na lista acima
 - Se NÃO souber responder algo ou a pergunta estiver fora do contexto imobiliário, responda EXATAMENTE: 'Vou encaminhar sua dúvida para um dos nossos corretores especializados. Em breve entraremos em contato! 📱'
 - Não invente informações sobre imóveis, preços ou disponibilidade
 - Para questões técnicas, jurídicas ou muito específicas, sempre indique que o corretor entrará em contato";

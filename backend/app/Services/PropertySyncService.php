@@ -160,6 +160,19 @@ class PropertySyncService
         // Imagem destaque
         $imagemDestaque = $this->getImagemDestaque($imovel['imagens'] ?? []);
         
+        // Preparar dados de imagens
+        $imagensData = [];
+        if (!empty($imovel['imagens']) && is_array($imovel['imagens'])) {
+            foreach ($imovel['imagens'] as $img) {
+                if (isset($img['url'])) {
+                    $imagensData[] = [
+                        'url' => $img['url'],
+                        'destaque' => $img['destaque'] ?? false
+                    ];
+                }
+            }
+        }
+        
         return [
             'codigo_imovel' => $imovel['codigoImovel'],
             'referencia_imovel' => $imovel['referenciaImovel'] ?? null,
@@ -184,6 +197,7 @@ class PropertySyncService
             'area_total' => $areaTotal,
             'area_terreno' => $areaTerreno,
             'imagem_destaque' => $imagemDestaque,
+            'imagens' => json_encode($imagensData), // Garantir que seja JSON
             'caracteristicas' => json_encode($caracteristicas),
             'em_condominio' => $imovel['emCondominio'] ? 1 : 0,
             'exclusividade' => $imovel['exclusividade'] ? 1 : 0,
