@@ -263,6 +263,19 @@ $router->get('/debug/property-list/{page?}', function ($page = 1) {
     }
 });
 
+// Debug configurações (TEMPORÁRIO)
+$router->get('/debug/config', function () {
+    return response()->json([
+        'app_env' => env('APP_ENV'),
+        'app_debug' => env('APP_DEBUG'),
+        'has_exclusiva_token' => !empty(env('EXCLUSIVA_API_TOKEN')),
+        'token_preview' => env('EXCLUSIVA_API_TOKEN') ? substr(env('EXCLUSIVA_API_TOKEN'), 0, 10) . '...' : 'NOT SET',
+        'has_openai_key' => !empty(env('OPENAI_API_KEY')),
+        'has_twilio_sid' => !empty(env('TWILIO_ACCOUNT_SID')),
+        'has_database_url' => !empty(env('DATABASE_URL'))
+    ]);
+});
+
 // ===========================
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
