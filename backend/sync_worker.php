@@ -63,7 +63,7 @@ function upsert_basico($row)
         'codigo_imovel' => $row['codigoImovel'],
         'referencia_imovel' => $row['referenciaImovel'] ?? null,
         'active' => ($row['statusImovel'] ?? false) ? 1 : 0,
-        'updated_at' => now(),
+        'updated_at' => date('Y-m-d H:i:s'),
     ];
     
     DB::table('imo_properties')->updateOrInsert(
