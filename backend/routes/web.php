@@ -235,6 +235,34 @@ $router->get('/debug/property-sync/{codigo}', function ($codigo) {
     }
 });
 
+// Debug lista da API (TEMPORÁRIO)
+$router->get('/debug/property-list/{page?}', function ($page = 1) {
+    try {
+        $syncService = app(App\Services\PropertySyncService::class);
+        
+        $reflection = new ReflectionClass($syncService);
+        $method = $reflection->getMethod('callApi');
+        $method->setAccessible(true);
+        
+        $response = $method->invoke($syncService, "/lista?page={$page}");
+        $resultSet = $response['resultSet'] ?? [];
+        
+        return response()->json([
+            'page' => $page,
+            'total_pages' => $resultSet['total_pages'] ?? 0,
+            'total_items' => $resultSet['total_items'] ?? 0,
+            'per_page' => $resultSet['per_page'] ?? 0,
+            'sample_codes' => collect($resultSet['data'] ?? [])->pluck('codigoImovel')->take(10)
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+});
+
 // ===========================
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
