@@ -243,7 +243,8 @@ class PropertySyncService
         $separator = strpos($endpoint, '?') !== false ? '&' : '?';
         $url = $this->baseUrl . $endpoint . $separator . 'token=' . urlencode($this->apiToken);
         
-        Log::debug("API Call: {$url}");
+        Log::debug("API Call URL: {$url}");
+        Log::debug("Token usado: " . substr($this->apiToken, 0, 10) . '...');
         
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -267,7 +268,8 @@ class PropertySyncService
         
         Log::debug("API Response: HTTP {$httpCode}", [
             'response_length' => strlen($response),
-            'has_error' => !empty($error)
+            'has_error' => !empty($error),
+            'response_preview' => substr($response, 0, 200)
         ]);
         
         if ($httpCode !== 200) {
