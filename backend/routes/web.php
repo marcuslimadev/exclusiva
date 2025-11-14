@@ -263,6 +263,69 @@ $router->get('/debug/property-list/{page?}', function ($page = 1) {
     }
 });
 
+// Debug insert único imóvel (TEMPORÁRIO)
+$router->get('/debug/insert-property/{codigo}', function ($codigo) {
+    try {
+        $syncService = app(App\Services\PropertySyncService::class);
+        
+        // Buscar dados da API
+        $reflection = new ReflectionClass($syncService);
+        $method = $reflection->getMethod('callApi');
+        $method->setAccessible(true);
+        
+        $response = $method->invoke($syncService, "/dados/{$codigo}");
+        
+        if (!isset($response['resultSet'])) {
+            return response()->json(['error' => 'Imóvel não encontrado na API'], 404);
+        }
+        
+        $imovel = $response['resultSet'];
+        
+        // Mapear dados
+        $mapMethod = $reflection->getMethod('mapPropertyData');
+        $mapMethod->setAccessible(true);
+        $mapped = $mapMethod->invoke($syncService, $imovel);
+        
+        // Verificar se já existe
+        $existing = \App\Models\Property::where('codigo_imovel', $codigo)->first();
+        
+        if ($existing) {
+            $result = $existing->update($mapped);
+            return response()->json([
+                'action' => 'updated',
+                'success' => $result,
+                'property_id' => $existing->id,
+                'data' => $mapped
+            ]);
+        } else {
+            try {
+                $property = \App\Models\Property::create($mapped);
+                return response()->json([
+                    'action' => 'created',
+                    'success' => true,
+                    'property_id' => $property->id,
+                    'data' => $mapped
+                ]);
+            } catch (\Exception $createError) {
+                return response()->json([
+                    'action' => 'create_failed',
+                    'error' => $createError->getMessage(),
+                    'code' => $createError->getCode(),
+                    'data' => $mapped
+                ], 500);
+            }
+        }
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => array_slice($e->getTrace(), 0, 3)
+        ], 500);
+    }
+});
+
 // Debug configurações (TEMPORÁRIO)
 $router->get('/debug/config', function () {
     return response()->json([
