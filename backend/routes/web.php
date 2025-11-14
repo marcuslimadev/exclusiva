@@ -197,6 +197,44 @@ $router->get('/debug/conversa/{id}', function ($id) {
     }
 });
 
+// Debug sync único imóvel (TEMPORÁRIO)
+$router->get('/debug/property-sync/{codigo}', function ($codigo) {
+    try {
+        $syncService = app(App\Services\PropertySyncService::class);
+        
+        // Testar busca de dados
+        $reflection = new ReflectionClass($syncService);
+        $method = $reflection->getMethod('callApi');
+        $method->setAccessible(true);
+        
+        $response = $method->invoke($syncService, "/dados/{$codigo}");
+        $imovel = $response['resultSet'] ?? null;
+        
+        if (!$imovel) {
+            return response()->json(['error' => 'Imóvel não encontrado na API'], 404);
+        }
+        
+        // Testar mapeamento
+        $mapMethod = $reflection->getMethod('mapPropertyData');
+        $mapMethod->setAccessible(true);
+        
+        $mapped = $mapMethod->invoke($syncService, $imovel);
+        
+        return response()->json([
+            'codigo' => $codigo,
+            'api_data' => $imovel,
+            'mapped_data' => $mapped
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => array_slice($e->getTrace(), 0, 5)
+        ], 500);
+    }
+});
+
 // ===========================
 // ROTAS PÚBLICAS (SEM AUTENTICAÇÃO)
 // ===========================
