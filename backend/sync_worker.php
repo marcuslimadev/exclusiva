@@ -26,6 +26,7 @@ if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
 
 $now = date('Y-m-d H:i:s');
 echo "🚀 Iniciando sincronização em duas fases em {$now}\n";
+echo "📌 Versão: 2.0 - Schema PostgreSQL Correto\n";
 
 // ============== HELPERS DE API ==============
 
