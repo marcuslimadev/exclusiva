@@ -1,0 +1,254 @@
+<?php
+/**
+ * Worker de sincronização de imóveis - Duas fases
+ * Fase 1: Percorre TODAS as páginas e salva dados básicos
+ * Fase 2: Busca detalhes apenas dos imóveis que precisam atualização
+ */
+
+require __DIR__.'/vendor/autoload.php';
+
+$app = require_once __DIR__.'/bootstrap/app.php';
+
+use Illuminate\Support\Facades\DB;
+
+set_time_limit(0);
+ini_set('memory_limit', '512M');
+
+define('API_TOKEN', '$2y$10$Lcn1ct.wEfBonZldcjuVQ.pD5p8gBRNrPlHjVwruaG5HAui2XCG9O');
+define('API_BASE', 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel');
+
+$lockFile = sys_get_temp_dir() . '/sync_2phase.lock';
+$lock = fopen($lockFile, 'c+');
+if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+    echo "⚠ Já existe um processo de sincronização rodando.\n";
+    exit;
+}
+
+$now = date('Y-m-d H:i:s');
+echo "🚀 Iniciando sincronização em duas fases em {$now}\n";
+
+// ============== HELPERS DE API ==============
+
+function call_api_get($url)
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'token: ' . API_TOKEN,
+            'User-Agent: Sync-Worker-2Phase/1.0'
+        ]
+    ]);
+    $resp = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200) {
+        echo "⚠ API retornou HTTP {$httpCode}\n";
+        return null;
+    }
+    
+    $data = json_decode($resp, true);
+    return is_array($data) ? $data : null;
+}
+
+// ============== FASE 1: SALVAR LISTA COMPLETA ==============
+
+function upsert_basico($row)
+{
+    $data = [
+        'codigo' => $row['codigoImovel'],
+        'referencia' => $row['referenciaImovel'] ?? null,
+        'atualizado_em' => $row['ultimaAtualizacaoImovel'] ?? null,
+        'cadastrado_em' => $row['dataInsercaoImovel'] ?? null,
+        'status_ativo' => ($row['statusImovel'] ?? false) ? 1 : 0,
+    ];
+    
+    DB::table('imoveis')->updateOrInsert(
+        ['codigo' => $data['codigo']],
+        $data
+    );
+}
+
+echo "\n📋 FASE 1: Salvando lista completa de imóveis...\n";
+echo "════════════════════════════════════════════════════════════════\n";
+
+$page = 1;
+$totalSaved = 0;
+$maxPages = 999;
+
+do {
+    $url = API_BASE . "/lista?status=ativo&page={$page}&per_page=100";
+    echo "📄 Página {$page}: {$url}\n";
+    
+    $lista = call_api_get($url);
+    
+    if (!$lista || !($lista['status'] ?? false)) {
+        echo "⚠ Falha ao obter página {$page}. Parando.\n";
+        break;
+    }
+    
+    $rs = $lista['resultSet'] ?? [];
+    $data = $rs['data'] ?? [];
+    $totalPages = (int)($rs['total_pages'] ?? 1);
+    
+    echo "   ✓ Encontrados " . count($data) . " imóveis (total de páginas: {$totalPages})\n";
+    
+    foreach ($data as $row) {
+        upsert_basico($row);
+        $totalSaved++;
+    }
+    
+    $page++;
+    
+    if ($page > $maxPages) {
+        echo "⚠ Atingido limite de {$maxPages} páginas. Parando.\n";
+        break;
+    }
+    
+} while ($page <= $totalPages);
+
+echo "\n✅ FASE 1 CONCLUÍDA: {$totalSaved} imóveis salvos/atualizados\n";
+echo "════════════════════════════════════════════════════════════════\n";
+
+// ============== FASE 2: BUSCAR DETALHES ==============
+
+echo "\n📝 FASE 2: Buscando detalhes dos imóveis...\n";
+echo "════════════════════════════════════════════════════════════════\n";
+
+$ids = DB::table('imoveis')
+    ->where(function($query) {
+        $query->whereNull('descricao')
+              ->orWhereNull('cidade')
+              ->orWhere('atualizado_em', '<', now()->subHours(4));
+    })
+    ->orderByRaw('atualizado_em ASC NULLS FIRST')
+    ->pluck('codigo')
+    ->toArray();
+
+echo "   ℹ️  Total de imóveis para atualizar: " . count($ids) . "\n\n";
+
+$updated = 0;
+$errors = 0;
+
+foreach ($ids as $codigo) {
+    try {
+        $url = API_BASE . "/dados/{$codigo}";
+        $det = call_api_get($url);
+        
+        if (!$det || !($det['status'] ?? false)) {
+            echo "⚠ Falha ao obter detalhes do imóvel {$codigo}\n";
+            $errors++;
+            continue;
+        }
+        
+        $imovel = $det['resultSet'];
+        
+        upsert_detalhes($imovel);
+        
+        echo "✓ Imóvel {$codigo} atualizado\n";
+        $updated++;
+        
+        usleep(100000); // 0.1s entre requisições
+        
+    } catch (Exception $e) {
+        echo "❌ Erro ao processar imóvel {$codigo}: " . $e->getMessage() . "\n";
+        $errors++;
+    }
+}
+
+echo "\n✅ FASE 2 CONCLUÍDA: {$updated} imóveis atualizados, {$errors} erros\n";
+echo "════════════════════════════════════════════════════════════════\n";
+
+// ============== FUNÇÃO DE ATUALIZAÇÃO DETALHADA ==============
+
+function upsert_detalhes($d)
+{
+    // Áreas
+    $area_privativa = null;
+    if (isset($d['area']['privativa']['valor'])) {
+        $area_privativa = (float)str_replace(',', '.', $d['area']['privativa']['valor']);
+    }
+    
+    $area_total = null;
+    if (isset($d['area']['total']['valor'])) {
+        $area_total = (float)str_replace(',', '.', $d['area']['total']['valor']);
+    }
+    
+    $area_terreno = null;
+    if (isset($d['area']['terreno']['valor'])) {
+        $area_terreno = (float)str_replace(',', '.', $d['area']['terreno']['valor']);
+    }
+    
+    $codigo = $d['codigoImovel'];
+    
+    // Atualizar dados principais
+    DB::table('imoveis')
+        ->where('codigo', $codigo)
+        ->update([
+            'finalidade' => $d['finalidadeImovel'] ?? null,
+            'tipo' => $d['descricaoTipoImovel'] ?? null,
+            'dormitorios' => $d['dormitorios'] ?? 0,
+            'suites' => $d['suites'] ?? 0,
+            'banheiros' => $d['banheiros'] ?? 0,
+            'salas' => $d['salas'] ?? 0,
+            'garagem' => $d['garagem'] ?? 0,
+            'acomodacoes' => $d['acomodacoes'] ?? 0,
+            'ano_construcao' => $d['anoConstrucao'] ?? null,
+            'valor' => $d['valorEsperado'] ?? null,
+            'cidade' => $d['endereco']['cidade'] ?? null,
+            'estado' => $d['endereco']['estado'] ?? null,
+            'bairro' => $d['endereco']['bairro'] ?? null,
+            'logradouro' => $d['endereco']['logradouro'] ?? null,
+            'numero' => $d['endereco']['numero'] ?? null,
+            'cep' => $d['endereco']['cep'] ?? null,
+            'area_privativa' => $area_privativa,
+            'area_total' => $area_total,
+            'terreno' => $area_terreno,
+            'descricao' => $d['descricaoImovel'] ?? null,
+            'atualizado_em' => $d['atualizadoEm'] ?? date('Y-m-d H:i:s'),
+        ]);
+    
+    // Atualizar imagens
+    DB::table('imoveis_imagens')->where('codigo', $codigo)->delete();
+    if (!empty($d['imagens'])) {
+        foreach ($d['imagens'] as $img) {
+            $url = $img['url'] ?? null;
+            $dest = ($img['destaque'] ?? false) ? 1 : 0;
+            if ($url) {
+                DB::table('imoveis_imagens')->insert([
+                    'codigo' => $codigo,
+                    'url' => $url,
+                    'destaque' => $dest,
+                ]);
+            }
+        }
+    }
+    
+    // Atualizar características
+    DB::table('imoveis_caracteristicas')->where('codigo', $codigo)->delete();
+    if (!empty($d['caracteristicas'])) {
+        foreach ($d['caracteristicas'] as $c) {
+            $g = $c['nomeGrupo'] ?? null;
+            $n = $c['nomeCaracteristica'] ?? null;
+            if ($n) {
+                DB::table('imoveis_caracteristicas')->insert([
+                    'codigo' => $codigo,
+                    'grupo' => $g,
+                    'nome' => $n,
+                ]);
+            }
+        }
+    }
+}
+
+echo "\n🎉 SINCRONIZAÇÃO COMPLETA!\n";
+echo "Total salvo na fase 1: {$totalSaved}\n";
+echo "Total atualizado na fase 2: {$updated}\n";
+echo "Erros: {$errors}\n\n";
+
+flock($lock, LOCK_UN);
+fclose($lock);
