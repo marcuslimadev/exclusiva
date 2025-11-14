@@ -467,10 +467,40 @@ $router->group(['prefix' => 'api/properties'], function () use ($router) {
     // Rotas específicas ANTES das dinâmicas
     $router->get('/sync', 'PropertyController@sync');
     
+    // Sync worker em duas fases
+    $router->get('/sync-worker', function () {
+        set_time_limit(300); // 5 minutos
+        
+        $output = [];
+        $exitCode = 0;
+        
+        $workerPath = base_path('sync_worker.php');
+        
+        if (!file_exists($workerPath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'sync_worker.php não encontrado',
+                'path' => $workerPath
+            ], 404);
+        }
+        
+        exec("php {$workerPath} 2>&1", $output, $exitCode);
+        
+        return response()->json([
+            'success' => $exitCode === 0,
+            'exit_code' => $exitCode,
+            'output' => implode("\n", $output),
+            'timestamp' => date('c')
+        ]);
+    });
+    
     // Rotas dinâmicas
     $router->get('/', 'PublicPropertyController@index');
     $router->get('/{codigo}', 'PublicPropertyController@show');
 });
+
+// Formatação de texto com IA
+$router->post('/api/format-text', 'TextFormatterController@formatText');
 
 // ===========================
 // WEBHOOK (SEM AUTENTICAÇÃO)
