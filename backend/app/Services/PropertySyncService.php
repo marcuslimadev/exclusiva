@@ -43,19 +43,27 @@ class PropertySyncService
             $page = 1;
             $totalPages = 1;
             
+            $perPage = 50;
+
             // Loop por todas as páginas
             do {
                 Log::info("📄 Buscando página {$page}...");
                 
+                // Montar query string para paginação
+                $queryString = http_build_query([
+                    'pagina' => $page,
+                    'limite' => $perPage
+                ]);
+                
                 // Buscar lista de imóveis (com paginação) - tentando GET primeiro
                 try {
-                    $lista = $this->callApi("/lista");
+                    $lista = $this->callApi("/lista?{$queryString}");
                 } catch (\Exception $e) {
                     // Se falhar, tentar POST
                     Log::info("GET /lista falhou, tentando POST...");
                     $lista = $this->callApiPost("/lista", [
                         'pagina' => $page,
-                        'limite' => 50
+                        'limite' => $perPage
                     ]);
                 }
                 
@@ -192,7 +200,7 @@ class PropertySyncService
             'referencia_imovel' => $imovel['referenciaImovel'] ?? null,
             'finalidade_imovel' => $imovel['finalidadeImovel'] ?? null,
             'tipo_imovel' => $imovel['descricaoTipoImovel'] ?? null,
-            'descricao' => $imovel['descricaoImovel'] ?? null,
+            'descricao' => $this->formatDescriptionWithAI($imovel['descricaoImovel'] ?? null),
             'dormitorios' => intval($imovel['dormitorios'] ?? 0),
             'suites' => intval($imovel['suites'] ?? 0),
             'banheiros' => intval($imovel['banheiros'] ?? 0),
@@ -215,8 +223,8 @@ class PropertySyncService
             'caracteristicas' => json_encode($caracteristicas),
             'em_condominio' => isset($imovel['emCondominio']) ? ($imovel['emCondominio'] ? 1 : 0) : 0,
             'exclusividade' => isset($imovel['exclusividade']) ? ($imovel['exclusividade'] ? 1 : 0) : 0,
-            'exibir_imovel' => isset($imovel['exibirImovel']) ? ($imovel['exibirImovel'] ? 1 : 0) : 1,
-            'active' => isset($imovel['exibirImovel']) ? ($imovel['exibirImovel'] ? 1 : 0) : 1,
+            'exibir_imovel' => 1, // Se está na API, deve ser exibido
+            'active' => 1, // Se está na API, está ativo
             'api_data' => json_encode($imovel)
         ];
     }
@@ -357,5 +365,96 @@ class PropertySyncService
         }
         
         return $data;
+    }
+
+    /**
+     * Formatar descrição de imóvel com OpenAI
+     */
+    private function formatDescriptionWithAI($descricao)
+    {
+        // Se não há descrição, retornar null
+        if (empty($descricao)) {
+            return null;
+        }
+
+        // Verificar se a OpenAI está configurada
+        $apiKey = env('OPENAI_API_KEY');
+        if (!$apiKey) {
+            Log::warning('OpenAI API key não configurada, usando descrição original');
+            return $descricao;
+        }
+
+        try {
+            $prompt = "Você é um especialista em marketing imobiliário. Formate esta descrição de imóvel de forma profissional, atrativa e organizada. Mantenha todas as informações importantes, mas torne-a mais vendável e bem estruturada. Use emojis apropriados e organize em tópicos quando necessário. Texto original:\n\n" . $descricao;
+
+            $data = [
+                'model' => 'gpt-4o-mini',
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'Você é um especialista em marketing imobiliário. Sua função é transformar descrições de imóveis em textos atraentes, bem formatados e profissionais.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => $prompt
+                    ]
+                ],
+                'max_tokens' => 1000,
+                'temperature' => 0.7
+            ];
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, 'https://api.openai.com/v1/chat/completions');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+
+            if ($error) {
+                Log::warning('OpenAI curl error: ' . $error);
+                return $descricao;
+            }
+
+            if ($httpCode !== 200) {
+                Log::warning('OpenAI HTTP error: ' . $httpCode . ' - ' . $response);
+                return $descricao;
+            }
+
+            $result = json_decode($response, true);
+            
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                Log::warning('OpenAI JSON parse error: ' . json_last_error_msg());
+                return $descricao;
+            }
+
+            if (!isset($result['choices'][0]['message']['content'])) {
+                Log::warning('OpenAI response format error', ['response' => $result]);
+                return $descricao;
+            }
+
+            $textoFormatado = trim($result['choices'][0]['message']['content']);
+            
+            Log::info('✨ Descrição formatada com sucesso via OpenAI');
+            
+            return $textoFormatado;
+
+        } catch (\Exception $e) {
+            Log::error('Erro ao formatar descrição com OpenAI', [
+                'error' => $e->getMessage(),
+                'descricao_original' => substr($descricao, 0, 100) . '...'
+            ]);
+            
+            // Em caso de erro, retornar descrição original
+            return $descricao;
+        }
     }
 }
