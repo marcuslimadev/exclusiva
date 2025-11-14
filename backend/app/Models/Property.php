@@ -20,17 +20,26 @@ class Property extends Model
         'garagem',
         'valor_venda',
         'valor_aluguel',
+        'valor_iptu',
+        'valor_condominio',
         'cidade',
         'estado',
         'bairro',
-        'endereco',
+        'logradouro',
+        'numero',
+        'complemento',
+        'cep',
         'area_privativa',
         'area_total',
+        'area_terreno',
         'imagem_destaque',
-        'caracteristicas',
         'imagens',
+        'caracteristicas',
+        'em_condominio',
+        'exclusividade',
         'exibir_imovel',
-        'active'
+        'active',
+        'api_data'
     ];
     
     protected $casts = [
