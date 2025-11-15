@@ -68,19 +68,54 @@ class Property extends Model
     // Accessor para garantir que imagens sempre retorne array
     public function getImagensAttribute($value)
     {
-        if (is_string($value)) {
-            return json_decode($value, true) ?: [];
+        // Se já é array, retorna direto
+        if (is_array($value)) {
+            return $value;
         }
-        return $value ?: [];
+        
+        // Se é string JSON, decodifica
+        if (is_string($value) && !empty($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        
+        // Caso contrário, retorna array vazio
+        return [];
     }
     
     // Accessor para garantir que caracteristicas sempre retorne array
     public function getCaracteristicasAttribute($value)
     {
-        if (is_string($value)) {
-            return json_decode($value, true) ?: [];
+        // Se já é array, retorna direto
+        if (is_array($value)) {
+            return $value;
         }
-        return $value ?: [];
+        
+        // Se é string JSON, decodifica
+        if (is_string($value) && !empty($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        
+        // Caso contrário, retorna array vazio
+        return [];
+    }
+    
+    // Sobrescrever toArray para garantir conversão
+    public function toArray()
+    {
+        $array = parent::toArray();
+        
+        // Garantir que imagens e caracteristicas sejam arrays
+        if (isset($array['imagens']) && is_string($array['imagens'])) {
+            $array['imagens'] = json_decode($array['imagens'], true) ?: [];
+        }
+        
+        if (isset($array['caracteristicas']) && is_string($array['caracteristicas'])) {
+            $array['caracteristicas'] = json_decode($array['caracteristicas'], true) ?: [];
+        }
+        
+        return $array;
     }
     
     // Relacionamento
