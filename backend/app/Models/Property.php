@@ -44,8 +44,6 @@ class Property extends Model
         'api_data'
     ];
     
-    protected $appends = ['imagens_array', 'caracteristicas_array'];
-    
     protected $casts = [
         'dormitorios' => 'integer',
         'suites' => 'integer',
