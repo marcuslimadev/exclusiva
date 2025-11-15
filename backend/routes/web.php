@@ -749,17 +749,23 @@ $router->get('/debug/trigger-sync', function () {
 });
 
 // Forçar FASE 2 (atualizar detalhes de todos os imóveis)
-$router->get('/debug/force-fase2', function () {
+$router->get('/debug/force-fase2', function () use ($router) {
     try {
         set_time_limit(600);
         ini_set('memory_limit', '512M');
         
         $db = app('db');
         
-        // Buscar todos os imóveis que precisam de detalhes
+        // Parâmetros
+        $limit = $router->app->request->query('limit', 50); // Processar 50 por vez
+        $offset = $router->app->request->query('offset', 0);
+        
+        // Buscar lote de imóveis
         $imoveis = $db->table('imo_properties')
             ->select('id', 'codigo_imovel', 'referencia_imovel')
             ->orderBy('id')
+            ->skip($offset)
+            ->take($limit)
             ->get();
         
         $total = count($imoveis);
@@ -834,7 +840,7 @@ $router->get('/debug/force-fase2', function () {
                     ->where('id', $imovel->id)
                     ->update([
                         'descricao' => $formatHtml($d['descricaoImovel'] ?? null),
-                        'updated_at' => now()
+                        'updated_at' => date('Y-m-d H:i:s')
                     ]);
                 
                 $updated++;
@@ -850,12 +856,20 @@ $router->get('/debug/force-fase2', function () {
             }
         }
         
+        $totalDb = $db->table('imo_properties')->count();
+        $hasMore = ($offset + $limit) < $totalDb;
+        
         return response()->json([
             'success' => true,
-            'total' => $total,
+            'offset' => $offset,
+            'limit' => $limit,
+            'processed' => count($imoveis),
             'updated' => $updated,
             'errors' => count($errors),
-            'error_samples' => array_slice($errors, 0, 5)
+            'error_samples' => array_slice($errors, 0, 3),
+            'total_db' => $totalDb,
+            'has_more' => $hasMore,
+            'next_offset' => $hasMore ? ($offset + $limit) : null
         ]);
         
     } catch (\Exception $e) {
