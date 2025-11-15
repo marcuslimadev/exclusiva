@@ -35,12 +35,16 @@ class Property extends Model
         'imagem_destaque',
         'imagens',
         'caracteristicas',
+        'latitude',
+        'longitude',
         'em_condominio',
         'exclusividade',
         'exibir_imovel',
         'active',
         'api_data'
     ];
+    
+    protected $appends = ['imagens_array', 'caracteristicas_array'];
     
     protected $casts = [
         'dormitorios' => 'integer',
