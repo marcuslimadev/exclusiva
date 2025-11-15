@@ -825,9 +825,21 @@ $router->get('/debug/force-fase2', function () use ($router) {
                 $ch = curl_init($url);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                 $response = curl_exec($ch);
                 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
                 curl_close($ch);
+                
+                if ($response === false || !empty($curlError)) {
+                    $errors[] = [
+                        'codigo' => $imovel->codigo_imovel,
+                        'error' => 'CURL: ' . $curlError
+                    ];
+                    continue;
+                }
                 
                 if ($httpCode !== 200) {
                     $skipped[] = [
