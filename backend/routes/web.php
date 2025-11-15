@@ -438,6 +438,12 @@ $router->get('/debug/convert-descriptions-html', function () {
         $formatHtml = function($text) {
             if (empty($text)) return null;
             
+            // Remove tags <p> e </p> se existirem
+            $text = preg_replace('/<\/?p>/', '', $text);
+            
+            // Decodifica HTML entities (&amp; -> &, &lt; -> <, &gt; -> >, &ndash; -> –)
+            $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            
             $text = trim($text);
             $text = str_replace(["\r\n", "\r", "\n"], "|||BR|||", $text);
             
@@ -514,12 +520,7 @@ $router->get('/debug/convert-descriptions-html', function () {
         $samples = [];
         
         foreach ($properties as $prop) {
-            // Verifica se já está em HTML
-            if (strpos($prop->descricao, '<') !== false) {
-                $skipped++;
-                continue;
-            }
-            
+            // Sempre reconverter para aplicar nova lógica de decodificação
             $htmlDesc = $formatHtml($prop->descricao);
             
             if ($htmlDesc) {
