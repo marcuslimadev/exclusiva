@@ -263,6 +263,46 @@ $router->get('/debug/property-list/{page?}', function ($page = 1) {
     }
 });
 
+// Debug total de imóveis da API (TEMPORÁRIO)
+$router->get('/debug/api-total', function () {
+    try {
+        define('API_TOKEN', '$2y$10$Lcn1ct.wEfBonZldcjuVQ.pD5p8gBRNrPlHjVwruaG5HAui2XCG9O');
+        define('API_BASE', 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel');
+        
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => API_BASE . '/lista?status=ativo&page=1&per_page=20',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . API_TOKEN]
+        ]);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if (!$response) {
+            return response()->json(['error' => 'Falha ao conectar API'], 500);
+        }
+        
+        $data = json_decode($response, true);
+        $resultSet = $data['resultSet'] ?? [];
+        
+        return response()->json([
+            'http_code' => $httpCode,
+            'status' => $data['status'] ?? false,
+            'total_items' => $resultSet['total_items'] ?? 0,
+            'total_pages' => $resultSet['total_pages'] ?? 0,
+            'per_page' => $resultSet['per_page'] ?? 0,
+            'sample_codes' => array_column($resultSet['data'] ?? [], 'codigoImovel')
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
 // Debug insert único imóvel (TEMPORÁRIO)
 $router->get('/debug/insert-property/{codigo}', function ($codigo) {
     try {
