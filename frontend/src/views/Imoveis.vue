@@ -485,14 +485,25 @@ const totalImoveis = computed(() => imoveis.value.length)
 const imoveisFiltrados = computed(() => {
   let result = imoveis.value
   
-  // Filtro de busca
+  // Filtro de busca - expandido para incluir mais campos
   if (filters.value.search) {
     const search = filters.value.search.toLowerCase()
-    result = result.filter(i => 
-      (i.bairro?.toLowerCase().includes(search)) ||
-      (i.cidade?.toLowerCase().includes(search)) ||
-      (i.tipo_imovel?.toLowerCase().includes(search))
-    )
+    result = result.filter(i => {
+      // Busca em campos básicos
+      const bairroMatch = i.bairro?.toLowerCase().includes(search)
+      const cidadeMatch = i.cidade?.toLowerCase().includes(search)
+      const tipoMatch = i.tipo_imovel?.toLowerCase().includes(search)
+      
+      // Busca em referência e código
+      const referenciaMatch = i.referencia_imovel?.toLowerCase().includes(search)
+      const codigoMatch = i.codigo_imovel?.toString().includes(search)
+      
+      // Busca na descrição (removendo HTML tags)
+      const descricaoText = i.descricao?.replace(/<[^>]*>/g, '').toLowerCase() || ''
+      const descricaoMatch = descricaoText.includes(search)
+      
+      return bairroMatch || cidadeMatch || tipoMatch || referenciaMatch || codigoMatch || descricaoMatch
+    })
   }
   
   // Filtro de tipo

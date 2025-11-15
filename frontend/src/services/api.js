@@ -1,7 +1,7 @@
 import axios from 'axios'
 
-// Usa variável de ambiente do Vite ou fallback para desenvolvimento
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost/imobi/backend/public'
+// Usa variável de ambiente do Vite ou fallback para backend do Render
+const API_URL = import.meta.env.VITE_API_URL || 'https://exclusiva-backend.onrender.com'
 
 const api = axios.create({
   baseURL: API_URL,
