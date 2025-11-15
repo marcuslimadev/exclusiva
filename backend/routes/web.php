@@ -748,3 +748,121 @@ $router->get('/debug/trigger-sync', function () {
     }
 });
 
+// Forçar FASE 2 (atualizar detalhes de todos os imóveis)
+$router->get('/debug/force-fase2', function () {
+    try {
+        set_time_limit(600);
+        ini_set('memory_limit', '512M');
+        
+        $db = app('db');
+        
+        // Buscar todos os imóveis que precisam de detalhes
+        $imoveis = $db->table('imo_properties')
+            ->select('id', 'codigo_imovel', 'referencia_imovel')
+            ->orderBy('id')
+            ->get();
+        
+        $total = count($imoveis);
+        $updated = 0;
+        $errors = [];
+        
+        define('API_TOKEN', '$2y$10$Lcn1ct.wEfBonZldcjuVQ.pD5p8gBRNrPlHjVwruaG5HAui2XCG9O');
+        define('API_BASE', 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel');
+        
+        // Função de formatação (mesma do sync_worker)
+        $formatHtml = function($text) {
+            if (empty($text)) return null;
+            $text = preg_replace('/<\/?p>/', '', $text);
+            $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $text = trim($text);
+            $text = str_replace(["\r\n", "\r", "\n"], "|||BR|||", $text);
+            $html = '';
+            $lines = explode("|||BR|||", $text);
+            $inList = false;
+            
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line)) {
+                    if ($inList) { $html .= '</ul>'; $inList = false; }
+                    $html .= '<br>';
+                    continue;
+                }
+                if (preg_match('/^[🏡✨🌟💰🚗📄🎯🔑⭐🎉]/', $line)) {
+                    if ($inList) { $html .= '</ul>'; $inList = false; }
+                    $html .= '<h3>' . htmlspecialchars($line) . '</h3>';
+                } elseif (preg_match('/^[\-\*•]/', $line) || preg_match('/^\*\*/', $line)) {
+                    if (!$inList) { $html .= '<ul>'; $inList = true; }
+                    $item = preg_replace('/^[\-\*•]\s*/', '', $line);
+                    $item = preg_replace('/\*\*([^:]+):\*\*/', '<strong>$1:</strong>', $item);
+                    $item = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $item);
+                    $item = htmlspecialchars($item, ENT_NOQUOTES);
+                    $item = str_replace(['|||STRONG|||', '|||/STRONG|||'], ['<strong>', '</strong>'], $item);
+                    $html .= '<li>' . $item . '</li>';
+                } else {
+                    if ($inList) { $html .= '</ul>'; $inList = false; }
+                    $line = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $line);
+                    $line = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $line);
+                    $line = htmlspecialchars($line, ENT_NOQUOTES);
+                    $line = str_replace(['|||STRONG|||', '|||/STRONG|||'], ['<strong>', '</strong>'], $line);
+                    $html .= '<p>' . $line . '</p>';
+                }
+            }
+            if ($inList) $html .= '</ul>';
+            return $html;
+        };
+        
+        foreach ($imoveis as $imovel) {
+            try {
+                // Buscar detalhes da API
+                $url = API_BASE . '/detalhes/' . $imovel->codigo_imovel . '?token=' . API_TOKEN;
+                $ch = curl_init($url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+                
+                if ($httpCode !== 200) continue;
+                
+                $data = json_decode($response, true);
+                if (!isset($data['imovel'])) continue;
+                
+                $d = $data['imovel'];
+                
+                // Atualizar apenas descrição
+                $db->table('imo_properties')
+                    ->where('id', $imovel->id)
+                    ->update([
+                        'descricao' => $formatHtml($d['descricaoImovel'] ?? null),
+                        'updated_at' => now()
+                    ]);
+                
+                $updated++;
+                
+                // Rate limiting
+                usleep(1100000); // 1.1 segundos
+                
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'codigo' => $imovel->codigo_imovel,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+        
+        return response()->json([
+            'success' => true,
+            'total' => $total,
+            'updated' => $updated,
+            'errors' => count($errors),
+            'error_samples' => array_slice($errors, 0, 5)
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
