@@ -54,9 +54,9 @@ class Property extends Model
         'area_privativa' => 'decimal:2',
         'area_total' => 'decimal:2',
         'area_terreno' => 'decimal:2',
-        'imagens' => 'array',
-        'caracteristicas' => 'array',
-        'api_data' => 'array',
+        'imagens' => 'json',
+        'caracteristicas' => 'json',
+        'api_data' => 'json',
         'em_condominio' => 'boolean',
         'exclusividade' => 'boolean',
         'exibir_imovel' => 'boolean',
@@ -64,6 +64,24 @@ class Property extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];
+    
+    // Accessor para garantir que imagens sempre retorne array
+    public function getImagensAttribute($value)
+    {
+        if (is_string($value)) {
+            return json_decode($value, true) ?: [];
+        }
+        return $value ?: [];
+    }
+    
+    // Accessor para garantir que caracteristicas sempre retorne array
+    public function getCaracteristicasAttribute($value)
+    {
+        if (is_string($value)) {
+            return json_decode($value, true) ?: [];
+        }
+        return $value ?: [];
+    }
     
     // Relacionamento
     public function leadMatches()
