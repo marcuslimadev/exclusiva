@@ -18,6 +18,7 @@ ini_set('memory_limit', '512M');
 
 define('API_TOKEN', '$2y$10$Lcn1ct.wEfBonZldcjuVQ.pD5p8gBRNrPlHjVwruaG5HAui2XCG9O');
 define('API_BASE', 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel');
+define('FORCE_FULL_UPDATE', true); // Forçar atualização completa (ignora cache de 4 horas)
 
 $lockFile = sys_get_temp_dir() . '/sync_2phase.lock';
 $lock = fopen($lockFile, 'c+');
@@ -234,15 +235,24 @@ echo "════════════════════════�
 
 $fourHoursAgo = date('Y-m-d H:i:s', strtotime('-4 hours'));
 
-$ids = DB::table('imo_properties')
-    ->where(function($query) use ($fourHoursAgo) {
-        $query->whereNull('descricao')
-              ->orWhereNull('cidade')
-              ->orWhere('updated_at', '<', $fourHoursAgo);
-    })
-    ->orderBy('updated_at', 'asc')
-    ->pluck('codigo_imovel')
-    ->toArray();
+if (defined('FORCE_FULL_UPDATE') && FORCE_FULL_UPDATE) {
+    echo "⚡ MODO FORÇADO: Atualizando TODOS os imóveis (ignorando cache)\n\n";
+    $ids = DB::table('imo_properties')
+        ->where('active', true)
+        ->orderBy('updated_at', 'asc')
+        ->pluck('codigo_imovel')
+        ->toArray();
+} else {
+    $ids = DB::table('imo_properties')
+        ->where(function($query) use ($fourHoursAgo) {
+            $query->whereNull('descricao')
+                  ->orWhereNull('cidade')
+                  ->orWhere('updated_at', '<', $fourHoursAgo);
+        })
+        ->orderBy('updated_at', 'asc')
+        ->pluck('codigo_imovel')
+        ->toArray();
+}
 
 echo "   ℹ️  Total de imóveis para atualizar: " . count($ids) . "\n\n";
 
