@@ -56,9 +56,9 @@ class Property extends Model
         'area_privativa' => 'decimal:2',
         'area_total' => 'decimal:2',
         'area_terreno' => 'decimal:2',
-        // 'imagens' => 'json', // Removido - usando accessor customizado
-        // 'caracteristicas' => 'json', // Removido - usando accessor customizado
-        'api_data' => 'json',
+        'imagens' => 'array',
+        'caracteristicas' => 'array',
+        'api_data' => 'array',
         'em_condominio' => 'boolean',
         'exclusividade' => 'boolean',
         'exibir_imovel' => 'boolean',
@@ -66,59 +66,6 @@ class Property extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];
-    
-    // Accessor para garantir que imagens sempre retorne array
-    public function getImagensAttribute($value)
-    {
-        // Se já é array, retorna direto
-        if (is_array($value)) {
-            return $value;
-        }
-        
-        // Se é string JSON, decodifica
-        if (is_string($value) && !empty($value)) {
-            $decoded = json_decode($value, true);
-            return is_array($decoded) ? $decoded : [];
-        }
-        
-        // Caso contrário, retorna array vazio
-        return [];
-    }
-    
-    // Accessor para garantir que caracteristicas sempre retorne array
-    public function getCaracteristicasAttribute($value)
-    {
-        // Se já é array, retorna direto
-        if (is_array($value)) {
-            return $value;
-        }
-        
-        // Se é string JSON, decodifica
-        if (is_string($value) && !empty($value)) {
-            $decoded = json_decode($value, true);
-            return is_array($decoded) ? $decoded : [];
-        }
-        
-        // Caso contrário, retorna array vazio
-        return [];
-    }
-    
-    // Sobrescrever toArray para garantir conversão
-    public function toArray()
-    {
-        $array = parent::toArray();
-        
-        // Garantir que imagens e caracteristicas sejam arrays
-        if (isset($array['imagens']) && is_string($array['imagens'])) {
-            $array['imagens'] = json_decode($array['imagens'], true) ?: [];
-        }
-        
-        if (isset($array['caracteristicas']) && is_string($array['caracteristicas'])) {
-            $array['caracteristicas'] = json_decode($array['caracteristicas'], true) ?: [];
-        }
-        
-        return $array;
-    }
     
     // Relacionamento
     public function leadMatches()

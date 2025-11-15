@@ -45,17 +45,6 @@ class PublicPropertyController extends Controller
         
         $properties = $query->get();
         
-        // Fix: Converter campos JSON que vieram como string
-        $properties = $properties->map(function($prop) {
-            if (is_string($prop->imagens)) {
-                $prop->imagens = json_decode($prop->imagens, true) ?: [];
-            }
-            if (is_string($prop->caracteristicas)) {
-                $prop->caracteristicas = json_decode($prop->caracteristicas, true) ?: [];
-            }
-            return $prop;
-        });
-        
         return response()->json([
             'success' => true,
             'total' => $properties->count(),
@@ -80,14 +69,6 @@ class PublicPropertyController extends Controller
                 'success' => false,
                 'error' => 'Imóvel não encontrado'
             ], 404);
-        }
-        
-        // Fix: Converter campos JSON que vieram como string
-        if (is_string($property->imagens)) {
-            $property->imagens = json_decode($property->imagens, true) ?: [];
-        }
-        if (is_string($property->caracteristicas)) {
-            $property->caracteristicas = json_decode($property->caracteristicas, true) ?: [];
         }
         
         return response()->json([
