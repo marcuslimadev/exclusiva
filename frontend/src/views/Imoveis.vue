@@ -726,9 +726,28 @@ const sanitizeAndFormatHTML = (html) => {
   const tempDiv = document.createElement('div')
   tempDiv.innerHTML = html
   
-  // Remove potentially dangerous tags/attributes (basic XSS protection)
-  const dangerous = tempDiv.querySelectorAll('script, iframe, object, embed')
-  dangerous.forEach(el => el.remove())
+  // Remove potentially dangerous tags (XSS protection)
+  const dangerousTags = tempDiv.querySelectorAll('script, iframe, object, embed, form, input, button, link, meta, style')
+  dangerousTags.forEach(el => el.remove())
+  
+  // Remove dangerous attributes from all elements
+  const allElements = tempDiv.querySelectorAll('*')
+  allElements.forEach(el => {
+    // Remove event handlers
+    Array.from(el.attributes).forEach(attr => {
+      if (attr.name.startsWith('on') || attr.name === 'href' && attr.value.startsWith('javascript:')) {
+        el.removeAttribute(attr.name)
+      }
+    })
+    
+    // Only allow safe href protocols
+    if (el.hasAttribute('href')) {
+      const href = el.getAttribute('href')
+      if (href && !href.match(/^(https?:\/\/|mailto:|tel:|#)/i)) {
+        el.removeAttribute('href')
+      }
+    }
+  })
   
   // Get the sanitized HTML
   let sanitized = tempDiv.innerHTML
@@ -847,6 +866,7 @@ onMounted(() => {
 .modal-backdrop {
   backdrop-filter: blur(8px);
   background-color: rgba(0, 0, 0, 0.7);
+  isolation: isolate;
 }
 
 .zoom-in {
