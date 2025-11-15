@@ -472,8 +472,13 @@ $router->get('/debug/convert-descriptions-html', function () {
                         $inList = true;
                     }
                     $item = preg_replace('/^[\-\*•]\s*/', '', $line);
-                    $item = preg_replace('/^\*\*([^:]+):\*\*/', '<strong>$1:</strong>', $item);
-                    $html .= '<li>' . htmlspecialchars($item, ENT_NOQUOTES) . '</li>';
+                    // Converte **texto:** para <strong>texto:</strong> ANTES de escapar
+                    $item = preg_replace('/\*\*([^:]+):\*\*/', '<strong>$1:</strong>', $item);
+                    // Escapa o resto mas preserva as tags <strong>
+                    $item = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $item);
+                    $item = htmlspecialchars($item, ENT_NOQUOTES);
+                    $item = str_replace(['|||STRONG|||', '|||/STRONG|||'], ['<strong>', '</strong>'], $item);
+                    $html .= '<li>' . $item . '</li>';
                 }
                 // Linha normal
                 else {
@@ -481,8 +486,12 @@ $router->get('/debug/convert-descriptions-html', function () {
                         $html .= '</ul>';
                         $inList = false;
                     }
+                    // Converte **texto** para <strong>texto</strong> ANTES de escapar
                     $line = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $line);
-                    $html .= '<p>' . htmlspecialchars($line, ENT_NOQUOTES) . '</p>';
+                    $line = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $line);
+                    $line = htmlspecialchars($line, ENT_NOQUOTES);
+                    $line = str_replace(['|||STRONG|||', '|||/STRONG|||'], ['<strong>', '</strong>'], $line);
+                    $html .= '<p>' . $line . '</p>';
                 }
             }
             

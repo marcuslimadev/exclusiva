@@ -67,8 +67,13 @@ function format_description_html($text) {
             }
             // Remove o marcador inicial
             $item = preg_replace('/^[\-\*•]\s*/', '', $line);
+            // Converte **texto:** para <strong>texto:</strong> ANTES de escapar
             $item = preg_replace('/^\*\*([^:]+):\*\*/', '<strong>$1:</strong>', $item);
-            $html .= '<li>' . htmlspecialchars($item) . '</li>';
+            // Escapa o resto mas preserva as tags <strong>
+            $item = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $item);
+            $item = htmlspecialchars($item, ENT_NOQUOTES);
+            $item = str_replace(['|||STRONG|||', '|||/STRONG|||'], ['<strong>', '</strong>'], $item);
+            $html .= '<li>' . $item . '</li>';
         }
         // Linha normal
         else {
@@ -78,7 +83,10 @@ function format_description_html($text) {
             }
             // Detecta negrito **texto**
             $line = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $line);
-            $html .= '<p>' . htmlspecialchars($line, ENT_NOQUOTES) . '</p>';
+            $line = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $line);
+            $line = htmlspecialchars($line, ENT_NOQUOTES);
+            $line = str_replace(['|||STRONG|||', '|||/STRONG|||'], ['<strong>', '</strong>'], $line);
+            $html .= '<p>' . $line . '</p>';
         }
     }
     
