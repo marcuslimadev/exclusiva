@@ -39,6 +39,8 @@ class PropertySyncService
                 'updated' => 0,
                 'errors' => 0
             ];
+
+            $errorDetails = [];
             
             $page = 1;
             $totalPages = 1;
@@ -118,8 +120,15 @@ class PropertySyncService
                         
                     } catch (\Exception $e) {
                         $stats['errors']++;
+                        $errorMessage = $e->getMessage();
+                        $errorDetails[] = [
+                            'codigo' => $codigo,
+                            'message' => $errorMessage,
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine()
+                        ];
                         Log::error("❌ Erro ao processar imóvel {$codigo}", [
-                            'error' => $e->getMessage()
+                            'error' => $errorMessage
                         ]);
                     }
                 }
@@ -138,7 +147,8 @@ class PropertySyncService
             return [
                 'success' => true,
                 'stats' => $stats,
-                'time_ms' => $elapsed
+                'time_ms' => $elapsed,
+                'errors_detail' => $errorDetails
             ];
             
         } catch (\Exception $e) {

@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Exclusiva Imóveis | Encontre o imóvel ideal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Encontre o imóvel ideal com a Exclusiva Imóveis. Apartamentos, casas e áreas privativas para venda e locação em Belo Horizonte e região.">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <!-- MapLibre GL CSS -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet">
+  <!-- Vue.js 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- MapLibre GL JS -->
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <!-- Animate.css -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a'
+            },
+            secondary: '#64748b',
+            accent: '#f59e0b'
+          },
+          fontFamily: {
+            'sans': ['Inter', 'system-ui', 'sans-serif']
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.6s ease-out',
+            'slide-up': 'slideUp 0.5s ease-out',
+            'bounce-in': 'bounceIn 0.8s ease-out',
+            'pulse-slow': 'pulse 3s infinite'
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            },
+            slideUp: {
+              '0%': { opacity: '0', transform: 'translateY(30px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            },
+            bounceIn: {
+              '0%': { opacity: '0', transform: 'scale(0.3)' },
+              '50%': { opacity: '1', transform: 'scale(1.05)' },
+              '70%': { transform: 'scale(0.9)' },
+              '100%': { opacity: '1', transform: 'scale(1)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    #map { 
+      height: 500px; 
+      border-radius: 16px; 
+      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    }
+
+    /* MapLibre GL específicos */
+    .maplibregl-popup-content {
+      border-radius: 12px !important;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2) !important;
+      font-family: 'Inter', sans-serif !important;
+    }
+
+    .maplibregl-ctrl-group {
+      border-radius: 8px !important;
+    }
+
+    /* Slideshow modal */
+    .slideshow-modal {
+      backdrop-filter: blur(8px);
+    }
+
+    .slideshow-image {
+      max-height: 70vh;
+      max-width: 90vw;
+      object-fit: contain;
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.8);
+    }
+
+    .slideshow-thumbnails {
+      max-width: 80vw;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    }
+
+    .slideshow-thumbnails::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .slideshow-thumbnails::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    .slideshow-thumbnails::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+    }
+
+    .slideshow-nav-btn {
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .slideshow-nav-btn:hover {
+      background: rgba(0, 0, 0, 0.8);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: scale(1.1);
+    }
+
+    /* Responsivo melhorado */
+    @media (max-width: 768px) {
+      #map {
+        height: 300px;
+      }
+
+      .slideshow-image {
+        max-height: 60vh;
+        max-width: 95vw;
+      }
+
+      .slideshow-nav-btn {
+        width: 40px;
+        height: 40px;
+      }
+
+      .slideshow-nav-btn i {
+        font-size: 1.2rem;
+      }
+
+      .slideshow-thumbnails {
+        max-width: 90vw;
+      }
+
+      .filter-card {
+        margin: 0 10px;
+        padding: 20px;
+      }
+
+      .property-card {
+        margin: 0 10px;
+      }
+
+      .modal-content {
+        margin: 10px;
+        max-height: calc(100vh - 20px);
+        border-radius: 16px;
+      }
+
+      .grid-cols-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      #map {
+        height: 250px;
+        border-radius: 12px;
+      }
+
+      .hero-gradient {
+        padding-top: 60px;
+        padding-bottom: 60px;
+      }
+
+      .hero-gradient h1 {
+        font-size: 2.5rem;
+      }
+
+      .hero-gradient p {
+        font-size: 1.1rem;
+      }
+
+      .filter-card {
+        border-radius: 16px;
+        padding: 16px;
+      }
+
+      .filter-card .grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .property-card {
+        margin: 0;
+      }
+
+      .property-image {
+        height: 200px;
+      }
+
+      .slideshow-nav-btn {
+        width: 36px;
+        height: 36px;
+      }
+
+      .slideshow-nav-btn i {
+        font-size: 1rem;
+      }
+
+      .slideshow-thumbnails img {
+        width: 50px;
+        height: 50px;
+      }
+    }
+    
+    .property-card {
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(10px);
+    }
+    
+    .property-card:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    }
+    
+    .property-image {
+      object-fit: cover;
+      height: 240px;
+      transition: all 0.4s ease;
+      border-radius: 12px 12px 0 0;
+    }
+    
+    .property-image:hover {
+      transform: scale(1.1);
+    }
+    
+    .glass-effect {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .hero-gradient {
+      background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
+    }
+    
+    .floating-animation {
+      animation: float 6s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-20px); }
+    }
+    
+    .modal-backdrop {
+      backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.6);
+    }
+    
+    .loading-spinner {
+      border: 4px solid #f3f4f6;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .price-badge {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    }
+    
+    .filter-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.8) 100%);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .scroll-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #3b82f6, #06b6d4);
+      transform-origin: left;
+      z-index: 9999;
+    }
+    
+    .feature-icon {
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      color: white;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 font-sans">
+  <div id="app">
+    <!-- Scroll Progress Indicator -->
+    <div class="scroll-indicator" :style="{ transform: `scaleX(${scrollProgress})` }"></div>
+    
+    <!-- Hero Header -->
+    <header class="hero-gradient text-white relative overflow-hidden">
+      <div class="absolute inset-0 bg-black opacity-20"></div>
+      <div class="absolute inset-0">
+        <div class="floating-animation absolute top-10 right-10 w-32 h-32 bg-white opacity-10 rounded-full"></div>
+        <div class="floating-animation absolute bottom-20 left-20 w-24 h-24 bg-white opacity-10 rounded-full" style="animation-delay: -2s;"></div>
+        <div class="floating-animation absolute top-1/2 left-1/2 w-16 h-16 bg-white opacity-10 rounded-full" style="animation-delay: -4s;"></div>
+      </div>
+      
+      <div class="relative max-w-7xl mx-auto px-4 py-16">
+        <div class="text-center animate-fade-in">
+          <div class="mb-6">
+            <i class="fas fa-home text-6xl mb-4 animate-bounce-in"></i>
+          </div>
+          <h1 class="text-5xl md:text-6xl font-bold mb-4 animate-slide-up">
+            Exclusiva Imóveis
+          </h1>
+          <p class="text-xl md:text-2xl mb-8 text-blue-100 animate-slide-up" style="animation-delay: 0.2s;">
+            Encontre o imóvel dos seus sonhos
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center animate-slide-up" style="animation-delay: 0.4s;">
+            <div class="flex items-center text-lg">
+              <i class="fas fa-map-marker-alt mr-2"></i>
+              <span>Belo Horizonte e Região</span>
+            </div>
+            <div class="flex items-center text-lg">
+              <i class="fas fa-shield-alt mr-2"></i>
+              <span>Negócios Seguros</span>
+            </div>
+            <div class="flex items-center text-lg">
+              <i class="fas fa-star mr-2"></i>
+              <span>Atendimento Premium</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-12">
+      <!-- Filtros Modernos -->
+      <div class="filter-card rounded-2xl shadow-2xl p-8 mb-12 animate-fade-in">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+          <div class="feature-icon mr-4">
+            <i class="fas fa-search"></i>
+          </div>
+          Encontre seu Imóvel Ideal
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700">Bairro</label>
+            <div class="relative">
+              <i class="fas fa-map-marker-alt absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <input 
+                v-model="filtros.bairro" 
+                @input="aplicarFiltros" 
+                class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300" 
+                type="text" 
+                placeholder="Ex: Itapoã">
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700">Cidade</label>
+            <div class="relative">
+              <i class="fas fa-city absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <input 
+                v-model="filtros.cidade" 
+                @input="aplicarFiltros" 
+                class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300" 
+                type="text" 
+                placeholder="Ex: Belo Horizonte">
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700">Preço Mínimo</label>
+            <div class="relative">
+              <i class="fas fa-dollar-sign absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <input 
+                v-model="filtros.precoMin" 
+                @change="aplicarFiltros" 
+                class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300" 
+                type="number" 
+                placeholder="R$ 0">
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700">Preço Máximo</label>
+            <div class="relative">
+              <i class="fas fa-dollar-sign absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <input 
+                v-model="filtros.precoMax" 
+                @change="aplicarFiltros" 
+                class="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-300" 
+                type="number" 
+                placeholder="R$ 999.999">
+            </div>
+          </div>
+          
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-gray-700">&nbsp;</label>
+            <button 
+              @click="aplicarFiltros" 
+              class="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center">
+              <i class="fas fa-search mr-2"></i>
+              Buscar
+            </button>
+          </div>
+        </div>
+        
+        <!-- Filtros Rápidos -->
+        <div class="mt-6 pt-6 border-t border-gray-200">
+          <p class="text-sm font-semibold text-gray-700 mb-3">Filtros Rápidos:</p>
+          <div class="flex flex-wrap gap-3">
+            <button 
+              @click="aplicarFiltroRapido('venda')"
+              class="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium hover:bg-green-200 transition-colors duration-300">
+              <i class="fas fa-tag mr-1"></i>
+              Para Venda
+            </button>
+            <button 
+              @click="aplicarFiltroRapido('locacao')"
+              class="px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium hover:bg-blue-200 transition-colors duration-300">
+              <i class="fas fa-key mr-1"></i>
+              Para Locação
+            </button>
+            <button 
+              @click="aplicarFiltroRapido('apartamento')"
+              class="px-4 py-2 bg-purple-100 text-purple-800 rounded-full text-sm font-medium hover:bg-purple-200 transition-colors duration-300">
+              <i class="fas fa-building mr-1"></i>
+              Apartamentos
+            </button>
+            <button 
+              @click="aplicarFiltroRapido('casa')"
+              class="px-4 py-2 bg-orange-100 text-orange-800 rounded-full text-sm font-medium hover:bg-orange-200 transition-colors duration-300">
+              <i class="fas fa-home mr-1"></i>
+              Casas
+            </button>
+            <button 
+              @click="limparFiltros"
+              class="px-4 py-2 bg-gray-100 text-gray-800 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors duration-300">
+              <i class="fas fa-times mr-1"></i>
+              Limpar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mapa Interativo -->
+      <div class="glass-effect rounded-2xl shadow-2xl p-8 mb-12 animate-fade-in">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+          <div class="feature-icon mr-4">
+            <i class="fas fa-map"></i>
+          </div>
+          Localização dos Imóveis
+        </h2>
+        <div id="map" class="shadow-2xl"></div>
+      </div>
+
+      <!-- Contador de Resultados -->
+      <div class="mb-8 animate-fade-in" v-if="!loading">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <p class="text-lg font-semibold text-gray-700">{{ contadorTexto }}</p>
+            <p v-if="filtrandoPorMapa" class="text-sm text-blue-600 mt-1">
+              <i class="fas fa-info-circle mr-1"></i>
+              Mostrando apenas imóveis visíveis no mapa. <button @click="limparFiltros" class="underline">Ver todos</button>
+            </p>
+          </div>
+          <div class="flex items-center space-x-4">
+            <select v-model="ordenacao" @change="aplicarOrdenacao" class="px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+              <option value="relevancia">Mais Relevantes</option>
+              <option value="preco-menor">Menor Preço</option>
+              <option value="preco-maior">Maior Preço</option>
+              <option value="recente">Mais Recentes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="loading" class="text-center py-20 animate-fade-in">
+        <div class="loading-spinner mx-auto mb-6"></div>
+        <p class="text-xl text-gray-600 font-medium">Carregando imóveis incríveis...</p>
+        <p class="text-gray-500 mt-2">Aguarde um momento</p>
+      </div>
+
+      <!-- Grid de Imóveis -->
+      <div v-else-if="(filtrandoPorMapa ? imoveisVisiveis : imoveisFiltrados).length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div 
+          v-for="(imovel, index) in (filtrandoPorMapa ? imoveisVisiveis : imoveisFiltrados)" 
+          :key="imovel.codigo" 
+          class="property-card bg-white rounded-2xl shadow-lg overflow-hidden animate-fade-in"
+          :style="{ animationDelay: `${index * 0.1}s` }">
+          
+          <div class="relative overflow-hidden">
+            <span 
+              :class="imovel.finalidade === 'Venda' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-blue-500 to-blue-600'" 
+              class="absolute top-4 left-4 text-white px-3 py-1 rounded-full text-sm font-bold z-10 shadow-lg">
+              {{ imovel.finalidade }}
+            </span>
+            
+            <div class="absolute top-4 right-4 z-10">
+              <button 
+                @click="toggleFavorito(imovel.codigo)"
+                :class="isFavorito(imovel.codigo) ? 'text-red-500' : 'text-white'"
+                class="w-10 h-10 bg-black bg-opacity-30 rounded-full flex items-center justify-center hover:bg-opacity-50 transition-all duration-300">
+                <i class="fas fa-heart"></i>
+              </button>
+            </div>
+            
+            <img 
+              :src="imovel.thumb_url || 'https://via.placeholder.com/400x300?text=Imagem+Indisponível'" 
+              :alt="imovel.tipo" 
+              class="property-image w-full"
+              @error="$event.target.src='https://via.placeholder.com/400x300?text=Imagem+Indisponível'">
+          </div>
+          
+          <div class="p-6">
+            <div class="mb-4">
+              <div class="price-badge inline-block mb-3">
+                {{ formatarMoeda(imovel.valor) }}
+              </div>
+              <p class="text-gray-600 flex items-center text-sm">
+                <i class="fas fa-map-marker-alt mr-2 text-primary-500"></i>
+                {{ imovel.bairro }}, {{ imovel.cidade }}
+              </p>
+            </div>
+            
+            <div class="flex items-center justify-between mb-4">
+              <span class="bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 px-3 py-1 rounded-full text-sm font-semibold">
+                {{ imovel.tipo }}
+              </span>
+              <span class="text-gray-500 text-xs">Ref: {{ imovel.referencia }}</span>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+              <div v-if="imovel.dormitorios" class="text-gray-600">
+                <i class="fas fa-bed text-primary-500 mb-1 block"></i>
+                <span class="text-xs font-medium">{{ imovel.dormitorios }} quartos</span>
+              </div>
+              <div v-if="imovel.banheiros" class="text-gray-600">
+                <i class="fas fa-bath text-primary-500 mb-1 block"></i>
+                <span class="text-xs font-medium">{{ imovel.banheiros }} banheiros</span>
+              </div>
+              <div v-if="imovel.garagem" class="text-gray-600">
+                <i class="fas fa-car text-primary-500 mb-1 block"></i>
+                <span class="text-xs font-medium">{{ imovel.garagem }} vagas</span>
+              </div>
+            </div>
+            
+            <div class="flex gap-3">
+              <button 
+                @click="abrirModal(imovel)" 
+                class="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center">
+                <i class="fas fa-eye mr-2"></i>
+                Ver Detalhes
+              </button>
+              <button 
+                class="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+                <i class="fas fa-whatsapp"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Estado Vazio -->
+      <div v-else class="text-center py-20 animate-fade-in">
+        <div class="mb-8">
+          <i class="fas fa-search text-8xl text-gray-300 mb-6"></i>
+          <h3 class="text-2xl font-bold text-gray-600 mb-4">Nenhum imóvel encontrado</h3>
+          <p class="text-gray-500 text-lg mb-8">Tente ajustar os filtros para ver mais resultados.</p>
+          <button 
+            @click="limparFiltros"
+            class="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+            <i class="fas fa-refresh mr-2"></i>
+            Limpar Filtros
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal de Detalhes Modernizado -->
+    <div v-show="modalAberto" class="fixed inset-0 z-50" @click.self="fecharModal">
+      <div class="modal-backdrop fixed inset-0 transition-opacity"></div>
+      <div class="flex items-center justify-center min-h-screen px-4 py-8">
+        <div class="relative bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden animate-bounce-in" @click.stop>
+          <!-- Header do Modal -->
+          <div class="bg-gradient-to-r from-primary-600 to-primary-700 text-white p-6 flex justify-between items-center">
+            <div>
+              <h3 class="text-2xl font-bold">{{ imovelSelecionado?.tipo }}</h3>
+              <p class="text-primary-100">{{ imovelSelecionado?.bairro }}, {{ imovelSelecionado?.cidade }}</p>
+            </div>
+            <button @click="fecharModal" class="text-white hover:text-gray-200 transition-colors duration-300 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white hover:bg-opacity-20">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          
+          <!-- Corpo do Modal -->
+          <div class="p-6 overflow-y-auto" style="max-height: calc(90vh - 200px);">
+            <!-- Preço e Informações Principais -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              <div>
+                <div class="price-badge text-2xl mb-4 inline-block">
+                  {{ formatarMoeda(imovelSelecionado?.valor) }}
+                </div>
+                
+                <div class="space-y-3">
+                  <p class="text-gray-600 flex items-center">
+                    <i class="fas fa-map-marker-alt mr-3 text-primary-500"></i>
+                    {{ imovelSelecionado?.logradouro }}, {{ imovelSelecionado?.numero }}
+                  </p>
+                  <p class="text-gray-600 flex items-center">
+                    <i class="fas fa-city mr-3 text-primary-500"></i>
+                    {{ imovelSelecionado?.bairro }}, {{ imovelSelecionado?.cidade }}/{{ imovelSelecionado?.estado }}
+                  </p>
+                  <p class="text-gray-600 flex items-center">
+                    <i class="fas fa-tag mr-3 text-primary-500"></i>
+                    Referência: {{ imovelSelecionado?.referencia }}
+                  </p>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div v-for="spec in especificacoesPrincipais" :key="spec.label" class="bg-gray-50 rounded-xl p-4 text-center">
+                  <i :class="spec.icon + ' text-2xl text-primary-500 mb-2 block'"></i>
+                  <p class="text-sm text-gray-600">{{ spec.label }}</p>
+                  <p class="font-bold text-gray-800">{{ spec.value }}</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Galeria de Imagens -->
+            <div class="mb-8">
+              <h5 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-images mr-3 text-primary-500"></i>
+                Galeria de Fotos
+              </h5>
+              <div v-if="imovelSelecionado?.imagens?.length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <img 
+                  v-for="(img, index) in imovelSelecionado.imagens.slice(0, 8)" 
+                  :key="index"
+                  :src="img" 
+                  class="w-full h-32 object-cover rounded-xl cursor-pointer hover:opacity-80 transition-all duration-300 transform hover:scale-105 shadow-lg" 
+                  @click="abrirSlideshow(index)"
+                  @error="$event.target.style.display='none'">
+              </div>
+              <div v-else class="text-center py-12 text-gray-500 bg-gray-50 rounded-xl">
+                <i class="fas fa-image text-4xl mb-4"></i>
+                <p>Nenhuma imagem disponível</p>
+              </div>
+            </div>
+            
+            <!-- Especificações Completas -->
+            <div class="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 mb-8">
+              <h5 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-list mr-3 text-primary-500"></i>
+                Especificações Completas
+              </h5>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div v-for="spec in especificacoes" :key="spec.label" class="flex items-center bg-white rounded-lg p-3">
+                  <i :class="spec.icon + ' text-primary-500 mr-3'" style="width: 20px;"></i>
+                  <div>
+                    <p class="text-sm text-gray-600">{{ spec.label }}</p>
+                    <p class="font-semibold text-gray-800">{{ spec.value }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Descrição -->
+            <div>
+              <h5 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-align-left mr-3 text-primary-500"></i>
+                Descrição do Imóvel
+              </h5>
+              <div class="bg-white border-2 border-gray-100 rounded-xl p-6">
+                <p class="text-gray-700 leading-relaxed text-justify">{{ descricaoLimpa }}</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Footer do Modal -->
+          <div class="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row gap-3 justify-end border-t">
+            <button @click="fecharModal" class="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-xl transition-all duration-300 font-semibold">
+              <i class="fas fa-times mr-2"></i>
+              Fechar
+            </button>
+            <button class="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl transition-all duration-300 font-semibold flex items-center">
+              <i class="fab fa-whatsapp mr-2"></i>
+              WhatsApp
+            </button>
+            <button class="px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl transition-all duration-300 font-semibold flex items-center">
+              <i class="fas fa-phone mr-2"></i>
+              Ligar Agora
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Slideshow de Imagens -->
+    <div v-show="slideshowAberto" class="slideshow-modal fixed inset-0 z-50 bg-black bg-opacity-95" @click.self="fecharSlideshow">
+      <div class="flex items-center justify-center h-full">
+        <!-- Botão Fechar -->
+        <button 
+          @click="fecharSlideshow" 
+          class="slideshow-nav-btn absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10 w-12 h-12 rounded-full flex items-center justify-center">
+          <i class="fas fa-times text-2xl"></i>
+        </button>
+        
+        <!-- Botão Anterior -->
+        <button 
+          v-if="slideshowIndex > 0"
+          @click="anteriorSlideshow" 
+          class="slideshow-nav-btn absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 w-12 h-12 rounded-full flex items-center justify-center">
+          <i class="fas fa-chevron-left text-2xl"></i>
+        </button>
+        
+        <!-- Botão Próximo -->
+        <button 
+          v-if="slideshowIndex < (imovelSelecionado?.imagens?.length || 0) - 1"
+          @click="proximoSlideshow" 
+          class="slideshow-nav-btn absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 w-12 h-12 rounded-full flex items-center justify-center">
+          <i class="fas fa-chevron-right text-2xl"></i>
+        </button>
+        
+        <!-- Imagem Principal -->
+        <div class="max-w-4xl max-h-full p-8 flex flex-col items-center">
+          <img 
+            v-if="imovelSelecionado?.imagens?.[slideshowIndex]"
+            :src="imovelSelecionado.imagens[slideshowIndex]" 
+            class="slideshow-image"
+            @error="fecharSlideshow">
+          
+          <!-- Indicador de Posição -->
+          <div class="text-white text-center mt-4 bg-black bg-opacity-50 px-4 py-2 rounded-full">
+            <span class="text-lg font-semibold">{{ slideshowIndex + 1 }} / {{ imovelSelecionado?.imagens?.length || 0 }}</span>
+          </div>
+        </div>
+        
+        <!-- Thumbnails -->
+        <div class="slideshow-thumbnails absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 px-4">
+          <img 
+            v-for="(img, index) in imovelSelecionado?.imagens" 
+            :key="index"
+            :src="img" 
+            @click="slideshowIndex = index"
+            :class="['w-16 h-16 object-cover rounded-lg cursor-pointer transition-all duration-300 border-2', 
+                     index === slideshowIndex ? 'border-white opacity-100' : 'border-transparent opacity-60 hover:opacity-100']"
+            @error="$event.target.style.display='none'">
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12 mt-20">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div>
+            <h3 class="text-2xl font-bold mb-4">Exclusiva Imóveis</h3>
+            <p class="text-gray-300 mb-4">Encontre o imóvel ideal com segurança e confiança. Atendimento personalizado para realizar seus sonhos.</p>
+            <div class="flex space-x-4">
+              <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
+                <i class="fab fa-facebook text-xl"></i>
+              </a>
+              <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
+                <i class="fab fa-instagram text-xl"></i>
+              </a>
+              <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
+                <i class="fab fa-whatsapp text-xl"></i>
+              </a>
+            </div>
+          </div>
+          
+          <div>
+            <h4 class="text-lg font-semibold mb-4">Contato</h4>
+            <div class="space-y-2 text-gray-300">
+              <p><i class="fas fa-phone mr-2"></i> (31) 9999-9999</p>
+              <p><i class="fas fa-envelope mr-2"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c8aba7a6bca9bca788adb0aba4bdbba1bea9a1a5a7beada1bbe6aba7a5e6aaba">[email&#160;protected]</a></p>
+              <p><i class="fas fa-map-marker-alt mr-2"></i> Belo Horizonte, MG</p>
+            </div>
+          </div>
+          
+          <div>
+            <h4 class="text-lg font-semibold mb-4">Serviços</h4>
+            <ul class="space-y-2 text-gray-300">
+              <li>Venda de Imóveis</li>
+              <li>Locação de Imóveis</li>
+              <li>Avaliação Imobiliária</li>
+              <li>Consultoria Imobiliária</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
+          <p>&copy; 2025 Exclusiva Imóveis. Todos os direitos reservados.</p>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Scripts -->
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="./app.js"></script>
+</body>
+</html>

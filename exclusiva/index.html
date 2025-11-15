@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catálogo de Imóveis | Exclusiva Imóveis</title>
+  <meta name="description" content="Encontre o imóvel ideal para você com a Exclusiva Imóveis">
+  
+  <!-- External CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="./assets/css/styles.css">
+  
+  <!-- Tailwind Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e40af',
+            secondary: '#64748b',
+            accent: '#3b82f6'
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-in',
+            'slide-up': 'slideUp 0.3s ease-out',
+            'shimmer': 'shimmer 2s infinite'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 font-sans">
+  <div id="app">
+    <!-- Loading Screen -->
+    <div v-if="isInitializing" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+      <div class="text-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
+        <p class="text-gray-600">Carregando aplicação...</p>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">Exclusiva Imóveis</h1>
+            <p class="text-gray-600 mt-1">Encontre o imóvel ideal para você</p>
+          </div>
+          <div class="text-primary">
+            <i class="fas fa-home text-4xl"></i>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+      <!-- Filtros -->
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+          <i class="fas fa-filter text-primary mr-2"></i>
+          Filtros de Busca
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700">Bairro</label>
+            <input 
+              v-model="filtros.bairro" 
+              @input="aplicarFiltros" 
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all" 
+              type="text" 
+              placeholder="Ex: Itapoã">
+          </div>
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700">Cidade</label>
+            <input 
+              v-model="filtros.cidade" 
+              @input="aplicarFiltros" 
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all" 
+              type="text" 
+              placeholder="Ex: Belo Horizonte">
+          </div>
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700">Preço Mínimo</label>
+            <input 
+              v-model="filtros.precoMin" 
+              @change="aplicarFiltros" 
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all" 
+              type="number" 
+              placeholder="R$ 0">
+          </div>
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700">Preço Máximo</label>
+            <input 
+              v-model="filtros.precoMax" 
+              @change="aplicarFiltros" 
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all" 
+              type="number" 
+              placeholder="R$ 999.999">
+          </div>
+          <div class="space-y-1">
+            <label class="block text-sm font-medium text-gray-700">&nbsp;</label>
+            <button 
+              @click="aplicarFiltros" 
+              class="w-full bg-primary hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center">
+              <i class="fas fa-search mr-2"></i>
+              Buscar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mapa -->
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+          <i class="fas fa-map-marker-alt text-primary mr-2"></i>
+          Localização dos Imóveis
+        </h2>
+        <div id="map" class="h-96 rounded-lg shadow-lg"></div>
+      </div>
+
+      <!-- Contador de resultados -->
+      <div class="mb-6" v-if="!loading">
+        <p class="text-gray-600 text-sm">{{ contadorTexto }}</p>
+      </div>
+
+      <!-- Loading -->
+      <div v-if="loading" class="text-center py-16">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
+        <p class="text-gray-600">Carregando imóveis...</p>
+      </div>
+
+      <!-- Grid de Imóveis -->
+      <div v-else-if="imoveisFiltrados.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div 
+          v-for="imovel in imoveisFiltrados" 
+          :key="imovel.codigo" 
+          class="property-card bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden animate-fade-in">
+          <div class="relative">
+            <span 
+              :class="imovel.finalidade === 'Venda' ? 'bg-green-500' : 'bg-blue-500'" 
+              class="status-badge absolute top-3 left-3 text-white px-3 py-1 rounded-full text-xs font-semibold z-10">
+              {{ imovel.finalidade }}
+            </span>
+            <img 
+              :src="imovel.thumb_url || 'https://via.placeholder.com/400x300'" 
+              :alt="imovel.tipo" 
+              class="property-image w-full h-48 object-cover rounded-t-xl transition-transform duration-300"
+              @error="handleImageError">
+          </div>
+          
+          <div class="p-5">
+            <div class="mb-3">
+              <h3 class="text-2xl font-bold text-primary mb-1">{{ formatarMoeda(imovel.valor) }}</h3>
+              <p class="text-gray-600 flex items-center">
+                <i class="fas fa-map-marker-alt mr-2 text-gray-400"></i>
+                {{ imovel.bairro }}, {{ imovel.cidade }}
+              </p>
+            </div>
+            
+            <div class="flex items-center justify-between mb-4">
+              <span class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">
+                {{ imovel.tipo }}
+              </span>
+              <span class="text-gray-500 text-sm">Ref: {{ imovel.referencia }}</span>
+            </div>
+            
+            <div class="flex items-center text-gray-600 text-sm mb-4 space-x-4">
+              <span v-if="imovel.dormitorios">
+                <i class="fas fa-bed mr-1"></i>{{ imovel.dormitorios }} quartos
+              </span>
+              <span v-if="imovel.banheiros">
+                <i class="fas fa-bath mr-1"></i>{{ imovel.banheiros }} banheiros
+              </span>
+              <span v-if="imovel.garagem">
+                <i class="fas fa-car mr-1"></i>{{ imovel.garagem }} vagas
+              </span>
+            </div>
+            
+            <button 
+              @click="abrirModal(imovel)" 
+              class="w-full bg-primary hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center">
+              <i class="fas fa-eye mr-2"></i>
+              Ver Detalhes
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Estado vazio -->
+      <div v-else class="text-center py-16">
+        <i class="fas fa-search text-6xl text-gray-300 mb-4"></i>
+        <h3 class="text-xl font-semibold text-gray-600 mb-2">Nenhum imóvel encontrado</h3>
+        <p class="text-gray-500">Tente ajustar os filtros para ver mais resultados.</p>
+      </div>
+    </main>
+
+    <!-- Modal de Detalhes -->
+    <div v-show="modalAberto" class="fixed inset-0 z-50" @click.self="fecharModal">
+      <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity backdrop-blur-sm"></div>
+      <div class="flex items-center justify-center min-h-screen px-4 py-8">
+        <div class="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden animate-slide-up" @click.stop>
+          <!-- Header do Modal -->
+          <div class="bg-primary text-white p-4 flex justify-between items-center">
+            <h3 class="text-xl font-bold">{{ imovelSelecionado?.tipo }} - {{ imovelSelecionado?.bairro }}</h3>
+            <button @click="fecharModal" class="text-white hover:text-gray-200 transition">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          
+          <!-- Corpo do Modal -->
+          <div class="p-4 overflow-y-auto" style="max-height: calc(85vh - 140px);">
+            <!-- Preço Principal -->
+            <h4 class="text-3xl font-bold text-primary mb-4">{{ formatarMoeda(imovelSelecionado?.valor) }}</h4>
+            
+            <!-- Endereço -->
+            <p class="text-gray-600 mb-4 flex items-center">
+              <i class="fas fa-map-marker-alt mr-2"></i>
+              {{ imovelSelecionado?.logradouro }}, {{ imovelSelecionado?.numero }} - 
+              {{ imovelSelecionado?.bairro }}, {{ imovelSelecionado?.cidade }}/{{ imovelSelecionado?.estado }}
+            </p>
+            
+            <!-- Galeria de Imagens -->
+            <div class="mb-6">
+              <h5 class="text-lg font-semibold mb-3">Fotos</h5>
+              <div v-if="imovelSelecionado?.imagens?.length" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <img 
+                  v-for="(img, index) in imovelSelecionado.imagens.slice(0, 6)" 
+                  :key="index"
+                  :src="img" 
+                  class="w-full h-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition" 
+                  @click="abrirImagemCompleta(img)"
+                  @error="handleImageError">
+              </div>
+              <div v-else class="text-center py-8 text-gray-500">
+                <i class="fas fa-image text-4xl mb-2"></i>
+                <p>Nenhuma imagem disponível</p>
+              </div>
+            </div>
+            
+            <!-- Especificações -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+              <h5 class="text-lg font-semibold mb-3">Especificações</h5>
+              <div class="grid grid-cols-2 gap-2">
+                <div v-for="spec in especificacoes" :key="spec.label" class="flex items-center">
+                  <i :class="spec.icon + ' text-primary mr-2'" style="width: 16px;"></i>
+                  <span class="text-sm"><strong>{{ spec.label }}:</strong> {{ spec.value }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Descrição -->
+            <div>
+              <h5 class="text-lg font-semibold mb-3">Descrição</h5>
+              <p class="text-gray-700 leading-relaxed">{{ descricaoLimpa }}</p>
+            </div>
+          </div>
+          
+          <!-- Footer do Modal -->
+          <div class="bg-gray-50 px-4 py-3 flex justify-end space-x-3 border-t">
+            <button @click="fecharModal" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition">
+              Fechar
+            </button>
+            <button class="px-4 py-2 bg-primary hover:bg-blue-700 text-white rounded-lg transition flex items-center">
+              <i class="fas fa-phone mr-2"></i>
+              Contato
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="fixed top-4 right-4 z-50">
+      <div v-for="toast in toasts" :key="toast.id" 
+           :class="toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'"
+           class="text-white px-4 py-2 rounded-lg shadow-lg mb-2 animate-slide-up">
+        {{ toast.message }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  
+  <!-- Modular Scripts -->
+  <script src="./assets/js/config.js"></script>
+  <script src="./assets/js/utils.js"></script>
+  <script src="./assets/js/api.js"></script>
+  <script src="./assets/js/map.js"></script>
+  <script src="./assets/js/filters.js"></script>
+  <script src="./assets/js/modal.js"></script>
+  <script src="./assets/js/app.js"></script>
+</body>
+</html>

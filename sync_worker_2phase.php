@@ -5,11 +5,7 @@
  * Fase 2: Busca detalhes apenas dos imóveis que precisam atualização
  */
 
-require __DIR__.'/vendor/autoload.php';
-
-$app = require_once __DIR__.'/bootstrap/app.php';
-
-use Illuminate\Support\Facades\DB;
+require_once __DIR__ . '/exclusiva/lib/db.php';
 
 set_time_limit(0);
 ini_set('memory_limit', '512M');

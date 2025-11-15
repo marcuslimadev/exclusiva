@@ -34,9 +34,37 @@
         <!-- Filters -->
         <div class="max-w-5xl mx-auto mt-12 animate__animated animate__fadeInUp">
           <div class="bg-white rounded-2xl shadow-2xl p-6">
-            <h3 class="text-gray-800 text-lg font-semibold mb-4">
-              <i class="fas fa-filter mr-2"></i>Filtrar Imóveis
-            </h3>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-gray-800 text-lg font-semibold">
+                <i class="fas fa-filter mr-2"></i>Filtrar Imóveis
+              </h3>
+              
+              <!-- View Toggle -->
+              <div class="flex gap-2 bg-gray-100 rounded-xl p-1">
+                <button 
+                  @click="modoVisualizacao = 'grid'"
+                  :class="[
+                    'px-4 py-2 rounded-lg font-semibold text-sm transition-all',
+                    modoVisualizacao === 'grid' 
+                      ? 'bg-white text-purple-600 shadow-md' 
+                      : 'text-gray-600 hover:text-purple-600'
+                  ]"
+                >
+                  <i class="fas fa-th-large mr-2"></i>Grade
+                </button>
+                <button 
+                  @click="modoVisualizacao = 'mapa'"
+                  :class="[
+                    'px-4 py-2 rounded-lg font-semibold text-sm transition-all',
+                    modoVisualizacao === 'mapa' 
+                      ? 'bg-white text-purple-600 shadow-md' 
+                      : 'text-gray-600 hover:text-purple-600'
+                  ]"
+                >
+                  <i class="fas fa-map-marked-alt mr-2"></i>Mapa
+                </button>
+              </div>
+            </div>
             
             <div class="grid md:grid-cols-4 gap-4 mb-4">
               <input 
@@ -101,8 +129,16 @@
       </div>
     </div>
     
+    <!-- Map View -->
+    <section v-if="!loading && modoVisualizacao === 'mapa'" class="container mx-auto px-4 py-16">
+      <PropertyMap 
+        :imoveis="imoveisFiltrados"
+        @property-click="abrirModal"
+      />
+    </section>
+    
     <!-- Properties Grid -->
-    <section v-else class="container mx-auto px-4 py-16">
+    <section v-else-if="!loading && modoVisualizacao === 'grid'" class="container mx-auto px-4 py-16">
       <div v-if="imoveisFiltrados.length === 0" class="text-center py-20">
         <i class="fas fa-search text-gray-300 text-6xl mb-4"></i>
         <h3 class="text-2xl font-semibold text-gray-700 mb-2">Nenhum imóvel encontrado</h3>
@@ -290,81 +326,114 @@
             
             <!-- Content -->
             <div class="p-8">
-              <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                <div>
+              <!-- Header -->
+              <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                <hgroup>
                   <h2 class="text-3xl font-bold text-gray-800 mb-2">
                     {{ imovelSelecionado.tipo_imovel }}
                   </h2>
-                  <p class="text-gray-600 flex items-center gap-2">
-                    <i class="fas fa-map-marker-alt text-purple-500"></i>
+                  <address class="text-gray-600 flex items-center gap-2 not-italic">
+                    <i class="fas fa-map-marker-alt text-purple-500" aria-hidden="true"></i>
                     {{ imovelSelecionado.bairro }}, {{ imovelSelecionado.cidade }} - {{ imovelSelecionado.estado }}
-                  </p>
-                </div>
-                <div class="price-tag text-white px-6 py-3 rounded-full font-bold text-2xl shadow-lg mt-4 md:mt-0">
+                  </address>
+                </hgroup>
+                <div class="price-tag text-white px-6 py-3 rounded-full font-bold text-2xl shadow-lg mt-4 md:mt-0" role="text" aria-label="Preço do imóvel">
                   {{ formatarPreco(imovelSelecionado.valor_venda) }}
                 </div>
-              </div>
+              </header>
               
               <!-- Features Grid -->
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div v-if="imovelSelecionado.dormitorios" class="bg-purple-50 rounded-xl p-4 text-center">
-                  <i class="fas fa-bed text-3xl text-purple-500 mb-2"></i>
-                  <p class="text-2xl font-bold text-gray-800">{{ imovelSelecionado.dormitorios }}</p>
+              <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" aria-label="Características do imóvel">
+                <article v-if="imovelSelecionado.dormitorios" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
+                  <i class="fas fa-bed text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
+                  <data :value="imovelSelecionado.dormitorios" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.dormitorios }}</data>
                   <p class="text-sm text-gray-600">Quartos</p>
-                </div>
-                <div v-if="imovelSelecionado.suites" class="bg-purple-50 rounded-xl p-4 text-center">
-                  <i class="fas fa-bath text-3xl text-purple-500 mb-2"></i>
-                  <p class="text-2xl font-bold text-gray-800">{{ imovelSelecionado.suites }}</p>
+                </article>
+                <article v-if="imovelSelecionado.suites" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
+                  <i class="fas fa-bath text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
+                  <data :value="imovelSelecionado.suites" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.suites }}</data>
                   <p class="text-sm text-gray-600">Suítes</p>
-                </div>
-                <div v-if="imovelSelecionado.garagem" class="bg-purple-50 rounded-xl p-4 text-center">
-                  <i class="fas fa-car text-3xl text-purple-500 mb-2"></i>
-                  <p class="text-2xl font-bold text-gray-800">{{ imovelSelecionado.garagem }}</p>
+                </article>
+                <article v-if="imovelSelecionado.garagem" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
+                  <i class="fas fa-car text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
+                  <data :value="imovelSelecionado.garagem" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.garagem }}</data>
                   <p class="text-sm text-gray-600">Vagas</p>
-                </div>
-                <div v-if="imovelSelecionado.area_total" class="bg-purple-50 rounded-xl p-4 text-center">
-                  <i class="fas fa-ruler-combined text-3xl text-purple-500 mb-2"></i>
-                  <p class="text-2xl font-bold text-gray-800">{{ imovelSelecionado.area_total }}</p>
+                </article>
+                <article v-if="imovelSelecionado.area_total" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
+                  <i class="fas fa-ruler-combined text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
+                  <data :value="imovelSelecionado.area_total" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.area_total }}</data>
                   <p class="text-sm text-gray-600">m²</p>
-                </div>
-              </div>
+                </article>
+              </section>
               
               <!-- Description -->
-              <div v-if="imovelSelecionado.descricao" class="mb-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-3">
-                  <i class="fas fa-info-circle mr-2"></i>Descrição
+              <section v-if="imovelSelecionado.descricao" class="mb-6" aria-labelledby="descricao-titulo">
+                <h3 id="descricao-titulo" class="text-xl font-bold text-gray-800 mb-3">
+                  <i class="fas fa-info-circle mr-2" aria-hidden="true"></i>Descrição
                 </h3>
-                <div class="bg-gray-50 rounded-xl p-4">
-                  <p class="text-gray-700 leading-relaxed whitespace-pre-line">
+                <article class="bg-gray-50 rounded-xl p-6 prose max-w-none">
+                  <p class="text-gray-700 leading-relaxed whitespace-pre-line text-justify">
                     {{ imovelSelecionado.descricao }}
                   </p>
-                </div>
-              </div>
+                </article>
+              </section>
               
               <!-- Additional Info -->
-              <div class="grid md:grid-cols-2 gap-4 mb-6">
-                <div v-if="imovelSelecionado.valor_condominio" class="bg-gray-50 rounded-xl p-4">
-                  <p class="text-sm text-gray-600 mb-1">Condomínio</p>
-                  <p class="text-lg font-bold text-gray-800">{{ formatarPreco(imovelSelecionado.valor_condominio) }}</p>
-                </div>
-                <div v-if="imovelSelecionado.valor_iptu" class="bg-gray-50 rounded-xl p-4">
-                  <p class="text-sm text-gray-600 mb-1">IPTU</p>
-                  <p class="text-lg font-bold text-gray-800">{{ formatarPreco(imovelSelecionado.valor_iptu) }}</p>
-                </div>
-              </div>
+              <section class="grid md:grid-cols-2 gap-4 mb-6" aria-label="Informações adicionais">
+                <article v-if="imovelSelecionado.valor_condominio" class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border border-blue-200">
+                  <header class="flex items-center gap-2 mb-2">
+                    <i class="fas fa-building text-blue-600" aria-hidden="true"></i>
+                    <h4 class="text-sm font-semibold text-blue-800">Condomínio</h4>
+                  </header>
+                  <data :value="imovelSelecionado.valor_condominio" class="text-lg font-bold text-gray-800">
+                    {{ formatarPreco(imovelSelecionado.valor_condominio) }}
+                  </data>
+                </article>
+                <article v-if="imovelSelecionado.valor_iptu" class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 border border-green-200">
+                  <header class="flex items-center gap-2 mb-2">
+                    <i class="fas fa-file-invoice-dollar text-green-600" aria-hidden="true"></i>
+                    <h4 class="text-sm font-semibold text-green-800">IPTU</h4>
+                  </header>
+                  <data :value="imovelSelecionado.valor_iptu" class="text-lg font-bold text-gray-800">
+                    {{ formatarPreco(imovelSelecionado.valor_iptu) }}
+                  </data>
+                </article>
+                <article v-if="imovelSelecionado.area_privativa" class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-5 border border-purple-200">
+                  <header class="flex items-center gap-2 mb-2">
+                    <i class="fas fa-home text-purple-600" aria-hidden="true"></i>
+                    <h4 class="text-sm font-semibold text-purple-800">Área Privativa</h4>
+                  </header>
+                  <data :value="imovelSelecionado.area_privativa" class="text-lg font-bold text-gray-800">
+                    {{ imovelSelecionado.area_privativa }} m²
+                  </data>
+                </article>
+                <article v-if="imovelSelecionado.ano_construcao" class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-5 border border-orange-200">
+                  <header class="flex items-center gap-2 mb-2">
+                    <i class="fas fa-calendar-alt text-orange-600" aria-hidden="true"></i>
+                    <h4 class="text-sm font-semibold text-orange-800">Ano de Construção</h4>
+                  </header>
+                  <time :datetime="imovelSelecionado.ano_construcao" class="text-lg font-bold text-gray-800">
+                    {{ imovelSelecionado.ano_construcao }}
+                  </time>
+                </article>
+              </section>
               
               <!-- WhatsApp CTA -->
-              <button 
-                @click="abrirWhatsApp(imovelSelecionado)"
-                class="whatsapp-button w-full text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 shadow-lg"
-              >
-                <i class="fab fa-whatsapp text-3xl"></i>
-                <span>Falar com um Corretor sobre este Imóvel</span>
-              </button>
-              
-              <p class="text-center text-sm text-gray-500 mt-4">
-                Ref: {{ imovelSelecionado.referencia_imovel || imovelSelecionado.codigo_imovel }}
-              </p>
+              <footer>
+                <button 
+                  @click="abrirWhatsApp(imovelSelecionado)"
+                  class="whatsapp-button w-full text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 shadow-lg"
+                  aria-label="Entrar em contato via WhatsApp sobre este imóvel"
+                >
+                  <i class="fab fa-whatsapp text-3xl" aria-hidden="true"></i>
+                  <span>Falar com um Corretor sobre este Imóvel</span>
+                </button>
+                
+                <p class="text-center text-sm text-gray-500 mt-4">
+                  <span class="font-semibold">Referência:</span> 
+                  <code class="bg-gray-100 px-2 py-1 rounded">{{ imovelSelecionado.referencia_imovel || imovelSelecionado.codigo_imovel }}</code>
+                </p>
+              </footer>
             </div>
           </div>
         </div>
@@ -385,12 +454,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import api from '../services/api'
+import PropertyMap from '../components/PropertyMap.vue'
 
 const imoveis = ref([])
 const loading = ref(true)
 const modalAberto = ref(false)
 const imovelSelecionado = ref({})
 const slideshowAtual = ref(0)
+const modoVisualizacao = ref('grid') // 'grid' ou 'mapa'
 const filters = ref({
   search: '',
   tipo: '',
@@ -616,6 +687,19 @@ onMounted(() => {
 
 .filter-pill:hover {
   transform: translateY(-2px);
+}
+
+.feature-card {
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.15);
+}
+
+.prose {
+  line-height: 1.75;
 }
 
 .fade-enter-active, .fade-leave-active {

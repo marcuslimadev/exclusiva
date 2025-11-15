@@ -24,12 +24,13 @@ class PropertyController extends Controller
         $result = $this->syncService->syncAll();
         
         if ($result['success']) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Sincronização concluída com sucesso',
-                'data' => $result['stats'],
-                'time_ms' => $result['time_ms']
-            ]);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Sincronização concluída com sucesso',
+                    'data' => $result['stats'],
+                    'time_ms' => $result['time_ms'],
+                    'errors_detail' => $result['errors_detail']
+                ]);
         } else {
             return response()->json([
                 'success' => false,
