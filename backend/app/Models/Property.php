@@ -54,8 +54,8 @@ class Property extends Model
         'area_privativa' => 'decimal:2',
         'area_total' => 'decimal:2',
         'area_terreno' => 'decimal:2',
-        'imagens' => 'json',
-        'caracteristicas' => 'json',
+        // 'imagens' => 'json', // Removido - usando accessor customizado
+        // 'caracteristicas' => 'json', // Removido - usando accessor customizado
         'api_data' => 'json',
         'em_condominio' => 'boolean',
         'exclusividade' => 'boolean',
