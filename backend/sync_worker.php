@@ -30,6 +30,23 @@ echo "📌 Versão: 2.0 - Schema PostgreSQL Correto\n";
 
 // ============== HELPERS DE API ==============
 
+function normalizar_finalidade($finalidade) {
+    $finalidade = trim($finalidade ?? '');
+    
+    // Mapear Locação -> Aluguel
+    if (stripos($finalidade, 'loca') !== false) {
+        return 'Aluguel';
+    }
+    
+    // Aceitar apenas: Venda, Aluguel, Venda/Aluguel
+    if (in_array($finalidade, ['Venda', 'Aluguel', 'Venda/Aluguel'])) {
+        return $finalidade;
+    }
+    
+    // Default
+    return 'Venda';
+}
+
 function call_api_get($url)
 {
     $ch = curl_init($url);
@@ -60,10 +77,21 @@ function call_api_get($url)
 
 function upsert_basico($row)
 {
+    // Mapear finalidade para valores aceitos pelo schema
+    $finalidade_raw = $row['finalidadeImovel'] ?? 'Venda';
+    $finalidade_map = [
+        'Locação' => 'Aluguel',
+        'Venda' => 'Venda',
+        'Aluguel' => 'Aluguel',
+        'Venda/Aluguel' => 'Venda/Aluguel',
+        'Venda / Aluguel' => 'Venda/Aluguel',
+    ];
+    $finalidade = $finalidade_map[$finalidade_raw] ?? 'Venda';
+    
     $data = [
         'codigo_imovel' => $row['codigoImovel'],
         'referencia_imovel' => $row['referenciaImovel'] ?? null,
-        'finalidade_imovel' => $row['finalidadeImovel'] ?? 'Venda',
+        'finalidade_imovel' => $finalidade,
         'tipo_imovel' => $row['descricaoTipoImovel'] ?? 'Residencial',
         'active' => ($row['statusImovel'] ?? false) ? 1 : 0,
         'updated_at' => date('Y-m-d H:i:s'),
@@ -189,14 +217,26 @@ function upsert_detalhes($d)
     
     $codigo = $d['codigoImovel'];
     
+    // Mapear finalidade para valores aceitos pelo schema
+    $finalidade_raw = $d['finalidadeImovel'] ?? 'Venda';
+    $finalidade_map = [
+        'Locação' => 'Aluguel',
+        'Venda' => 'Venda',
+        'Aluguel' => 'Aluguel',
+        'Venda/Aluguel' => 'Venda/Aluguel',
+        'Venda / Aluguel' => 'Venda/Aluguel',
+    ];
+    $finalidade = $finalidade_map[$finalidade_raw] ?? 'Venda';
+    
     // Determinar valores (venda/aluguel baseado na finalidade)
     $valor_venda = null;
     $valor_aluguel = null;
-    $finalidade = strtolower($d['finalidadeImovel'] ?? '');
+    $finalidade_lower = strtolower($finalidade);
     
-    if (strpos($finalidade, 'venda') !== false) {
+    if (strpos($finalidade_lower, 'venda') !== false) {
         $valor_venda = $d['valorEsperado'] ?? null;
-    } elseif (strpos($finalidade, 'aluguel') !== false || strpos($finalidade, 'locação') !== false) {
+    }
+    if (strpos($finalidade_lower, 'aluguel') !== false) {
         $valor_aluguel = $d['valorEsperado'] ?? null;
     }
     
@@ -224,7 +264,7 @@ function upsert_detalhes($d)
     DB::table('imo_properties')
         ->where('codigo_imovel', $codigo)
         ->update([
-            'finalidade_imovel' => $d['finalidadeImovel'] ?? 'Venda',
+            'finalidade_imovel' => $finalidade,
             'tipo_imovel' => $d['descricaoTipoImovel'] ?? 'Residencial',
             'dormitorios' => $d['dormitorios'] ?? 0,
             'suites' => $d['suites'] ?? 0,
