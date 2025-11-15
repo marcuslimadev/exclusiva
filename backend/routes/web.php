@@ -821,7 +821,7 @@ $router->get('/debug/force-fase2', function () use ($router) {
         foreach ($imoveis as $imovel) {
             try {
                 // Buscar detalhes da API
-                $url = API_BASE . '/detalhes/' . $imovel->codigo_imovel . '?token=' . API_TOKEN;
+                $url = API_BASE . '/dados/' . $imovel->codigo_imovel;
                 $ch = curl_init($url);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_TIMEOUT, 30);
@@ -850,15 +850,15 @@ $router->get('/debug/force-fase2', function () use ($router) {
                 }
                 
                 $data = json_decode($response, true);
-                if (!isset($data['imovel'])) {
+                if (!isset($data['resultSet'])) {
                     $skipped[] = [
                         'codigo' => $imovel->codigo_imovel,
-                        'reason' => 'No imovel data'
+                        'reason' => 'No resultSet data'
                     ];
                     continue;
                 }
                 
-                $d = $data['imovel'];
+                $d = $data['resultSet'];
                 
                 // Atualizar apenas descrição
                 $db->table('imo_properties')
