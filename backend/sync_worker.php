@@ -69,8 +69,14 @@ function geocode_address($endereco)
     $cidade = trim($endereco['cidade'] ?? '');
     $estado = trim($endereco['estado'] ?? '');
     
+    // Se cidade está vazia, assumir Belo Horizonte/MG (base da Exclusiva Lar)
+    if (empty($cidade)) {
+        $cidade = 'Belo Horizonte';
+        $estado = 'MG';
+    }
+    
     // Se não tem endereço mínimo, retorna null
-    if (empty($cidade) || (empty($logradouro) && empty($bairro))) {
+    if (empty($bairro) && empty($logradouro)) {
         return ['lat' => null, 'lng' => null];
     }
     
@@ -98,7 +104,7 @@ function geocode_address($endereco)
     foreach ($queries as $query) {
         $coords = nominatim_search($query);
         if ($coords['lat'] && $coords['lng']) {
-            echo "   🗺️  Geocodificado: {$query}\n";
+            echo "   🗺️  Geocodificado: {$query} → {$coords['lat']}, {$coords['lng']}\n";
             return $coords;
         }
         
@@ -106,7 +112,7 @@ function geocode_address($endereco)
         usleep(1100000); // 1.1 segundos
     }
     
-    echo "   ⚠️  Não foi possível geocodificar: {$cidade}, {$estado}\n";
+    echo "   ⚠️  Não foi possível geocodificar: {$bairro}, {$cidade}, {$estado}\n";
     return ['lat' => null, 'lng' => null];
 }
 
