@@ -19,6 +19,20 @@ class PublicPropertyController extends Controller
             ->orderBy('created_at', 'desc');
         
         // Filtros opcionais
+        
+        // Busca textual geral
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('bairro', 'ILIKE', '%' . $search . '%')
+                  ->orWhere('cidade', 'ILIKE', '%' . $search . '%')
+                  ->orWhere('tipo_imovel', 'ILIKE', '%' . $search . '%')
+                  ->orWhere('referencia_imovel', 'ILIKE', '%' . $search . '%')
+                  ->orWhere('logradouro', 'ILIKE', '%' . $search . '%')
+                  ->orWhere('descricao', 'ILIKE', '%' . $search . '%');
+            });
+        }
+        
         if ($request->has('tipo')) {
             $query->where('tipo_imovel', 'ILIKE', '%' . $request->tipo . '%');
         }

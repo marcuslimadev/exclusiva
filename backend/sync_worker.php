@@ -28,6 +28,12 @@ function format_description_html($text) {
         return null;
     }
     
+    // Remove tags <p> e </p> se existirem
+    $text = preg_replace('/<\/?p>/', '', $text);
+    
+    // Decodifica HTML entities (&amp; -> &, &lt; -> <, &gt; -> >, &ndash; -> –)
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    
     // Remove espaços extras
     $text = trim($text);
     

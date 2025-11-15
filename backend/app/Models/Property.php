@@ -67,6 +67,33 @@ class Property extends Model
         'updated_at' => 'datetime'
     ];
     
+    // Accessor para normalizar imagens
+    public function getImagensAttribute($value)
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (!is_array($decoded)) {
+                return [];
+            }
+            $value = $decoded;
+        }
+        
+        if (!is_array($value)) {
+            return [];
+        }
+        
+        // Normalizar: se são strings, converter para objetos {url, destaque}
+        return array_map(function($img) {
+            if (is_string($img)) {
+                return ['url' => $img, 'destaque' => false];
+            }
+            if (is_array($img) && !isset($img['url'])) {
+                return ['url' => '', 'destaque' => false];
+            }
+            return $img;
+        }, $value);
+    }
+    
     // Relacionamento
     public function leadMatches()
     {
