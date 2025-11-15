@@ -108,14 +108,21 @@ class PropertySyncService
                         
                         $data = $this->mapPropertyData($imovel);
                         
+                        // Contar imagens para logging
+                        $numImagens = 0;
+                        if (isset($data['imagens'])) {
+                            $imagensArray = json_decode($data['imagens'], true);
+                            $numImagens = is_array($imagensArray) ? count($imagensArray) : 0;
+                        }
+                        
                         if ($existing) {
                             $existing->update($data);
                             $stats['updated']++;
-                            Log::debug("✏️ Imóvel {$codigo} atualizado");
+                            Log::debug("✏️ Imóvel {$codigo} atualizado ({$numImagens} imagens)");
                         } else {
                             Property::create($data);
                             $stats['new']++;
-                            Log::debug("➕ Imóvel {$codigo} criado");
+                            Log::debug("➕ Imóvel {$codigo} criado ({$numImagens} imagens)");
                         }
                         
                     } catch (\Exception $e) {
@@ -138,6 +145,14 @@ class PropertySyncService
             } while ($page <= $totalPages);
             
             $elapsed = round((microtime(true) - $startTime) * 1000, 2);
+            
+            // Contar quantos imóveis têm imagens
+            $comImagens = Property::whereNotNull('imagens')
+                ->where('imagens', '!=', '[]')
+                ->where('imagens', '!=', '')
+                ->count();
+            
+            $stats['with_images'] = $comImagens;
             
             Log::info('✅ Sincronização concluída', [
                 'stats' => $stats,

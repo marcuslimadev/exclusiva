@@ -272,9 +272,19 @@ foreach ($ids as $codigo) {
         
         $imovel = $det['resultSet'];
         
+        // Contar imagens antes de salvar (para logging)
+        $numImagens = 0;
+        if (isset($imovel['imagens']) && is_array($imovel['imagens'])) {
+            foreach ($imovel['imagens'] as $img) {
+                if (isset($img['url']) && !empty($img['url'])) {
+                    $numImagens++;
+                }
+            }
+        }
+        
         upsert_detalhes($imovel);
         
-        echo "✓ Imóvel {$codigo} atualizado\n";
+        echo "✓ Imóvel {$codigo} atualizado ({$numImagens} imagens)\n";
         $updated++;
         
         usleep(100000); // 0.1s entre requisições
@@ -347,14 +357,17 @@ function upsert_detalhes($d)
     // Coletar imagens em array JSON
     $imagens = [];
     $imagem_destaque = null;
-    if (!empty($d['imagens'])) {
+    if (!empty($d['imagens']) && is_array($d['imagens'])) {
         foreach ($d['imagens'] as $img) {
-            $imagens[] = [
-                'url' => $img['url'],
-                'destaque' => (bool)($img['destaque'] ?? false)
-            ];
-            if (($img['destaque'] ?? false) && !$imagem_destaque) {
-                $imagem_destaque = $img['url'];
+            // Garantir que a URL existe antes de adicionar
+            if (isset($img['url']) && !empty($img['url'])) {
+                $imagens[] = [
+                    'url' => $img['url'],
+                    'destaque' => (bool)($img['destaque'] ?? false)
+                ];
+                if (($img['destaque'] ?? false) && !$imagem_destaque) {
+                    $imagem_destaque = $img['url'];
+                }
             }
         }
     }
@@ -410,7 +423,16 @@ function upsert_detalhes($d)
 echo "\n🎉 SINCRONIZAÇÃO COMPLETA!\n";
 echo "Total salvo na fase 1: {$totalSaved}\n";
 echo "Total atualizado na fase 2: {$updated}\n";
-echo "Erros: {$errors}\n\n";
+echo "Erros: {$errors}\n";
+
+// Verificar quantos imóveis têm imagens
+$comImagens = DB::table('imo_properties')
+    ->whereNotNull('imagens')
+    ->where('imagens', '!=', '[]')
+    ->where('imagens', '!=', '')
+    ->count();
+
+echo "Imóveis com imagens: {$comImagens}\n\n";
 
 flock($lock, LOCK_UN);
 fclose($lock);
