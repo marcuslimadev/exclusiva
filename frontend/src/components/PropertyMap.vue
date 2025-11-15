@@ -9,6 +9,16 @@
         <i class="fas fa-map-marked-alt mr-2"></i>
         <span>{{ filteredCount }} imóveis na visualização</span>
       </div>
+      
+      <!-- Redo Search Button -->
+      <button 
+        v-if="showRedoSearch" 
+        @click="redoSearch"
+        class="redo-search-button"
+      >
+        <i class="fas fa-redo-alt mr-2"></i>
+        Refazer busca nesta área
+      </button>
     </div>
     
     <!-- Zoom Filter Info -->
@@ -16,6 +26,93 @@
       <i class="fas fa-info-circle mr-2"></i>
       Filtrando imóveis na área visível do mapa
     </div>
+    
+    <!-- Hover Preview Card -->
+    <transition name="slide-up">
+      <div 
+        v-if="hoveredProperty" 
+        class="hover-preview-card"
+        :style="{ left: previewCardPosition.x + 'px', top: previewCardPosition.y + 'px' }"
+      >
+        <div class="preview-image-container">
+          <img 
+            :src="hoveredProperty.imagem_destaque || 'https://via.placeholder.com/280x160?text=Imóvel'" 
+            :alt="hoveredProperty.tipo_imovel"
+            class="preview-image"
+          >
+          <span class="preview-badge" :class="hoveredProperty.finalidade_imovel === 'Venda' ? 'badge-venda' : 'badge-aluguel'">
+            {{ hoveredProperty.finalidade_imovel }}
+          </span>
+        </div>
+        <div class="preview-content">
+          <div class="preview-price">{{ formatarMoeda(hoveredProperty.valor_venda || hoveredProperty.valor_aluguel) }}</div>
+          <div class="preview-title">{{ hoveredProperty.tipo_imovel }}</div>
+          <div class="preview-address">
+            <i class="fas fa-map-marker-alt"></i>
+            {{ hoveredProperty.bairro }}, {{ hoveredProperty.cidade }}
+          </div>
+          <div class="preview-features">
+            <span v-if="hoveredProperty.dormitorios">
+              <i class="fas fa-bed"></i> {{ hoveredProperty.dormitorios }}
+            </span>
+            <span v-if="hoveredProperty.suites">
+              <i class="fas fa-bath"></i> {{ hoveredProperty.suites }}
+            </span>
+            <span v-if="hoveredProperty.garagem">
+              <i class="fas fa-car"></i> {{ hoveredProperty.garagem }}
+            </span>
+            <span v-if="hoveredProperty.area_total">
+              <i class="fas fa-ruler-combined"></i> {{ hoveredProperty.area_total }}m²
+            </span>
+          </div>
+        </div>
+      </div>
+    </transition>
+    
+    <!-- Keyboard Shortcuts Help -->
+    <transition name="fade">
+      <div v-if="showKeyboardHelp" class="keyboard-help-overlay">
+        <div class="keyboard-help-content">
+          <div class="keyboard-help-header">
+            <h3><i class="fas fa-keyboard mr-2"></i>Atalhos do Teclado</h3>
+            <button @click="showKeyboardHelp = false" class="close-help-btn">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="keyboard-shortcuts">
+            <div class="shortcut-item">
+              <kbd>Ctrl</kbd> + <kbd>↑↓←→</kbd>
+              <span>Mover mapa</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Ctrl</kbd> + <kbd>+</kbd>
+              <span>Zoom in</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Ctrl</kbd> + <kbd>-</kbd>
+              <span>Zoom out</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Esc</kbd>
+              <span>Fechar popup</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>?</kbd>
+              <span>Mostrar/ocultar ajuda</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+    
+    <!-- Help Button -->
+    <button 
+      @click="showKeyboardHelp = !showKeyboardHelp" 
+      class="keyboard-help-btn"
+      title="Atalhos do teclado (pressione ?)"
+    >
+      <i class="fas fa-question-circle"></i>
+    </button>
   </div>
 </template>
 
@@ -23,6 +120,11 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+import 'leaflet.markercluster'
+import 'leaflet-draw/dist/leaflet.draw.css'
+import 'leaflet-draw'
 
 const props = defineProps({
   imoveis: {
@@ -42,12 +144,19 @@ const emit = defineEmits(['update:filteredProperties', 'property-click'])
 const mapContainer = ref(null)
 const map = ref(null)
 const markersLayer = ref(null)
+const markerClusterGroup = ref(null)
 const userMarker = ref(null)
 const currentLayer = ref('SATELLITE')
 const zoomFilterEnabled = ref(true)
 const lastBounds = ref(null)
 const filteredCount = ref(0)
 const showZoomFilterInfo = ref(false)
+const showRedoSearch = ref(false)
+const hoveredProperty = ref(null)
+const previewCardPosition = ref({ x: 0, y: 0 })
+const drawControl = ref(null)
+const drawnItems = ref(null)
+const showKeyboardHelp = ref(false)
 
 // Map Configuration
 const mapConfig = {
@@ -56,6 +165,7 @@ const mapConfig = {
   MIN_ZOOM: 10,
   MAX_ZOOM: 19,
   MIN_ZOOM_FOR_FILTER: 14,
+  MIN_ZOOM_FOR_INDIVIDUAL_MARKERS: 15, // Below this, show price clusters
   TILE_LAYERS: {
     SATELLITE: {
       name: 'Satélite',
@@ -97,15 +207,32 @@ const inicializarMapa = async () => {
       maxZoom: mapConfig.MAX_ZOOM
     }).addTo(map.value)
 
-    // Create markers layer
-    markersLayer.value = L.layerGroup().addTo(map.value)
+    // Create marker cluster group with custom styling
+    markerClusterGroup.value = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      spiderfyOnMaxZoom: true,
+      removeOutsideVisibleBounds: true,
+      maxClusterRadius: 80,
+      iconCreateFunction: createClusterIcon,
+      disableClusteringAtZoom: mapConfig.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS
+    })
+    
+    map.value.addLayer(markerClusterGroup.value)
+
+    // Create drawn items layer for custom area selection
+    drawnItems.value = new L.FeatureGroup()
+    map.value.addLayer(drawnItems.value)
 
     // Add custom controls
     adicionarControles()
 
     // Map events
-    map.value.on('moveend', verificarFiltroZoom)
+    map.value.on('moveend', handleMapMoveEnd)
     map.value.on('zoomend', verificarFiltroZoom)
+    map.value.on('dragend', () => {
+      showRedoSearch.value = true
+    })
 
     console.log('Mapa inicializado com sucesso')
     
@@ -117,6 +244,71 @@ const inicializarMapa = async () => {
   } catch (error) {
     console.error('Erro ao inicializar mapa:', error)
   }
+}
+
+// Create Custom Cluster Icon with Price Range
+const createClusterIcon = (cluster) => {
+  const markers = cluster.getAllChildMarkers()
+  const prices = markers.map(m => {
+    const price = m.options.propertyData?.valor_venda || m.options.propertyData?.valor_aluguel || 0
+    return parseFloat(price)
+  }).filter(p => p > 0)
+  
+  const count = markers.length
+  const avgPrice = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : 0
+  const minPrice = prices.length > 0 ? Math.min(...prices) : 0
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : 0
+  
+  const priceRange = formatPriceRange(minPrice, maxPrice)
+  
+  const html = `
+    <div class="cluster-marker">
+      <div class="cluster-count">${count}</div>
+      <div class="cluster-price">${priceRange}</div>
+    </div>
+  `
+  
+  return L.divIcon({
+    html: html,
+    className: 'custom-cluster-icon',
+    iconSize: L.point(80, 80)
+  })
+}
+
+// Format Price Range for Clusters
+const formatPriceRange = (min, max) => {
+  if (min === 0 && max === 0) return 'Consulte'
+  
+  const formatShort = (value) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}M`
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(0)}K`
+    }
+    return value.toString()
+  }
+  
+  if (min === max) {
+    return `R$ ${formatShort(min)}`
+  }
+  
+  return `R$ ${formatShort(min)}-${formatShort(max)}`
+}
+
+// Handle Map Move End - Show "Redo Search" button
+const handleMapMoveEnd = () => {
+  const currentBounds = map.value.getBounds()
+  
+  if (lastBounds.value && !boundsEqual(currentBounds, lastBounds.value)) {
+    showRedoSearch.value = true
+  }
+}
+
+// Redo Search in Current Map Area
+const redoSearch = () => {
+  verificarFiltroZoom()
+  showRedoSearch.value = false
+  lastBounds.value = map.value.getBounds()
 }
 
 // Add Custom Controls
@@ -187,20 +379,93 @@ const adicionarControles = () => {
     }
   })
 
+  // Draw Control for custom area selection
+  drawControl.value = new L.Control.Draw({
+    position: 'topleft',
+    draw: {
+      polygon: {
+        allowIntersection: false,
+        drawError: {
+          color: '#e74c3c',
+          message: '<strong>Erro!</strong> A área não pode se intersectar.'
+        },
+        shapeOptions: {
+          color: '#6366f1',
+          weight: 3
+        }
+      },
+      rectangle: {
+        shapeOptions: {
+          color: '#6366f1',
+          weight: 3
+        }
+      },
+      circle: {
+        shapeOptions: {
+          color: '#6366f1',
+          weight: 3
+        }
+      },
+      polyline: false,
+      marker: false,
+      circlemarker: false
+    },
+    edit: {
+      featureGroup: drawnItems.value,
+      remove: true
+    }
+  })
+
   map.value.addControl(new LayerControl())
   map.value.addControl(new LocationControl())
   map.value.addControl(new FilterControl())
+  map.value.addControl(drawControl.value)
+
+  // Handle drawn shapes
+  map.value.on(L.Draw.Event.CREATED, (event) => {
+    const layer = event.layer
+    drawnItems.value.clearLayers()
+    drawnItems.value.addLayer(layer)
+    
+    // Filter properties within drawn area
+    filterPropertiesByDrawnArea(layer)
+  })
+
+  map.value.on(L.Draw.Event.DELETED, () => {
+    // Reset filter when area is deleted
+    emit('update:filteredProperties', props.imoveis)
+  })
+}
+
+// Filter Properties by Drawn Area
+const filterPropertiesByDrawnArea = (layer) => {
+  const filteredProperties = props.imoveis.filter(imovel => {
+    if (!validarCoordenadas(imovel.latitude, imovel.longitude)) return false
+    
+    const point = L.latLng(parseFloat(imovel.latitude), parseFloat(imovel.longitude))
+    
+    if (layer instanceof L.Circle) {
+      return layer.getLatLng().distanceTo(point) <= layer.getRadius()
+    } else if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+      return layer.getBounds().contains(point)
+    }
+    
+    return false
+  })
+  
+  emit('update:filteredProperties', filteredProperties)
+  atualizarMarkers(filteredProperties)
 }
 
 // Update Markers
 const atualizarMarkers = (imoveis) => {
-  if (!map.value || !markersLayer.value) return
+  if (!map.value || !markerClusterGroup.value) return
 
   try {
     console.log(`Atualizando ${imoveis.length} markers no mapa...`)
     
     // Clear existing markers
-    markersLayer.value.clearLayers()
+    markerClusterGroup.value.clearLayers()
 
     const bounds = []
     let markersValidos = 0
@@ -214,7 +479,7 @@ const atualizarMarkers = (imoveis) => {
       const lng = parseFloat(imovel.longitude)
 
       const marker = criarMarker(lat, lng, imovel)
-      marker.addTo(markersLayer.value)
+      markerClusterGroup.value.addLayer(marker)
 
       bounds.push([lat, lng])
       markersValidos++
@@ -265,7 +530,10 @@ const criarMarker = (lat, lng, imovel) => {
     popupAnchor: [0, -20]
   })
 
-  const marker = L.marker([lat, lng], { icon: customIcon })
+  const marker = L.marker([lat, lng], { 
+    icon: customIcon,
+    propertyData: imovel // Store property data for clustering
+  })
 
   // Create popup
   const popupContent = criarPopupContent(imovel)
@@ -274,8 +542,26 @@ const criarMarker = (lat, lng, imovel) => {
     className: 'custom-popup'
   })
 
-  // Marker events
-  marker.on('mouseover', () => marker.openPopup())
+  // Marker events with hover preview
+  marker.on('mouseover', (e) => {
+    hoveredProperty.value = imovel
+    
+    // Position the preview card near the marker
+    const markerPoint = map.value.latLngToContainerPoint(e.latlng)
+    previewCardPosition.value = {
+      x: markerPoint.x + 50,
+      y: markerPoint.y - 100
+    }
+    
+    marker.openPopup()
+  })
+  
+  marker.on('mouseout', () => {
+    setTimeout(() => {
+      hoveredProperty.value = null
+    }, 300)
+  })
+  
   marker.on('click', () => {
     emit('property-click', imovel)
     if (props.onPropertyClick) {
@@ -493,6 +779,9 @@ onMounted(async () => {
       emit('property-click', imovel)
     }
   })
+  
+  // Keyboard navigation
+  window.addEventListener('keydown', handleKeyboardNavigation)
 })
 
 onBeforeUnmount(() => {
@@ -500,7 +789,71 @@ onBeforeUnmount(() => {
     map.value.remove()
     map.value = null
   }
+  
+  window.removeEventListener('keydown', handleKeyboardNavigation)
 })
+
+// Keyboard Navigation Handler
+const handleKeyboardNavigation = (e) => {
+  if (!map.value) return
+  
+  const panDistance = 100
+  const zoomStep = 1
+  
+  // Toggle help with '?'
+  if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault()
+    showKeyboardHelp.value = !showKeyboardHelp.value
+    return
+  }
+  
+  switch(e.key) {
+    case 'ArrowUp':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([0, -panDistance])
+      }
+      break
+    case 'ArrowDown':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([0, panDistance])
+      }
+      break
+    case 'ArrowLeft':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([-panDistance, 0])
+      }
+      break
+    case 'ArrowRight':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([panDistance, 0])
+      }
+      break
+    case '+':
+    case '=':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.zoomIn(zoomStep)
+      }
+      break
+    case '-':
+    case '_':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.zoomOut(zoomStep)
+      }
+      break
+    case 'Escape':
+      // Close any open popups and help
+      map.value.closePopup()
+      hoveredProperty.value = null
+      showKeyboardHelp.value = false
+      break
+  }
+}
 </script>
 
 <style scoped>
@@ -563,6 +916,132 @@ onBeforeUnmount(() => {
 }
 
 @keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Redo Search Button */
+.redo-search-button {
+  background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 2rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.redo-search-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+}
+
+/* Hover Preview Card */
+.hover-preview-card {
+  position: absolute;
+  z-index: 1001;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  width: 280px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.preview-image-container {
+  position: relative;
+  height: 140px;
+  overflow: hidden;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.preview-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 15px;
+  font-size: 11px;
+  font-weight: bold;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.preview-content {
+  padding: 12px;
+}
+
+.preview-price {
+  font-size: 18px;
+  font-weight: bold;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+
+.preview-title {
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.preview-address {
+  color: #6b7280;
+  font-size: 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.preview-features {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.preview-features span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.preview-features i {
+  color: #6366f1;
+}
+
+.slide-up-enter-active {
+  animation: slideUpPreview 0.2s ease-out;
+}
+
+.slide-up-leave-active {
+  animation: slideUpPreview 0.15s ease-in reverse;
+}
+
+@keyframes slideUpPreview {
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(10px);
@@ -836,4 +1315,211 @@ onBeforeUnmount(() => {
 .popup-button i {
   margin-right: 8px;
 }
+
+/* Custom Cluster Marker Styles */
+.custom-cluster-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.cluster-marker {
+  background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+  border: 4px solid white;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  animation: clusterPulse 2s ease-in-out infinite;
+}
+
+@keyframes clusterPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  }
+}
+
+.cluster-count {
+  color: white;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.cluster-price {
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* Leaflet Draw Styles Override */
+.leaflet-draw-toolbar {
+  margin-top: 10px !important;
+}
+
+.leaflet-draw-draw-polygon,
+.leaflet-draw-draw-rectangle,
+.leaflet-draw-draw-circle {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border-radius: 8px !important;
+}
+
+.leaflet-draw-actions {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border-radius: 8px !important;
+}
+
+/* Keyboard Help Overlay */
+.keyboard-help-btn {
+  position: absolute;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.keyboard-help-btn:hover {
+  background: white;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  transform: scale(1.05);
+}
+
+.keyboard-help-btn i {
+  color: #6366f1;
+  font-size: 24px;
+}
+
+.keyboard-help-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.keyboard-help-content {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.keyboard-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.keyboard-help-header h3 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #374151;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.keyboard-help-header i {
+  color: #6366f1;
+}
+
+.close-help-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+
+.close-help-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.keyboard-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.shortcut-item:hover {
+  background: #f3f4f6;
+  transform: translateX(4px);
+}
+
+.shortcut-item kbd {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  font-family: monospace;
+  font-weight: bold;
+  color: #374151;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 0.875rem;
+}
+
+.shortcut-item span {
+  flex: 1;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+
 </style>

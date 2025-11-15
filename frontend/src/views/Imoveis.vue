@@ -63,6 +63,18 @@
                 >
                   <i class="fas fa-map-marked-alt mr-2"></i>Mapa
                 </button>
+                <button 
+                  @click="modoVisualizacao = 'split'"
+                  :class="[
+                    'px-4 py-2 rounded-lg font-semibold text-sm transition-all',
+                    modoVisualizacao === 'split' 
+                      ? 'bg-white text-purple-600 shadow-md' 
+                      : 'text-gray-600 hover:text-purple-600'
+                  ]"
+                  title="Vista dividida: lista e mapa"
+                >
+                  <i class="fas fa-columns mr-2"></i>Dividido
+                </button>
               </div>
             </div>
             
@@ -145,6 +157,97 @@
         :imoveis="imoveisFiltrados"
         @property-click="abrirModal"
       />
+    </section>
+    
+    <!-- Split View (List + Map) - Zillow Style -->
+    <section v-else-if="!loading && modoVisualizacao === 'split'" class="container-fluid px-0 py-0">
+      <div class="split-view-container">
+        <!-- Properties List (Left Side) -->
+        <div class="split-view-list">
+          <div class="split-view-scroll">
+            <div v-if="imoveisFiltrados.length === 0" class="text-center py-20 px-4">
+              <i class="fas fa-search text-gray-300 text-6xl mb-4"></i>
+              <h3 class="text-2xl font-semibold text-gray-700 mb-2">Nenhum imóvel encontrado</h3>
+              <p class="text-gray-500">Tente ajustar os filtros ou entre em contato conosco!</p>
+              <button @click="abrirWhatsApp()" class="mt-6 whatsapp-button text-white px-8 py-4 rounded-full font-semibold inline-flex items-center gap-2">
+                <i class="fab fa-whatsapp text-2xl"></i>
+                Falar com um Corretor
+              </button>
+            </div>
+            
+            <div v-else class="grid gap-6 p-6">
+              <div 
+                v-for="imovel in imoveisFiltrados" 
+                :key="imovel.codigo_imovel"
+                class="card-hover bg-white rounded-2xl overflow-hidden shadow-lg cursor-pointer split-property-card"
+                @click="abrirModal(imovel)"
+                @mouseenter="highlightMarker(imovel)"
+                @mouseleave="unhighlightMarker()"
+              >
+                <!-- Compact Card for Split View -->
+                <div class="flex gap-4">
+                  <!-- Image -->
+                  <div class="relative w-48 h-40 flex-shrink-0 overflow-hidden bg-gray-200">
+                    <img 
+                      :src="imovel.imagem_destaque || 'https://via.placeholder.com/400x300?text=Imóvel'" 
+                      :alt="imovel.tipo_imovel"
+                      class="image-hover w-full h-full object-cover"
+                    >
+                    
+                    <!-- Price Tag -->
+                    <div class="absolute bottom-2 right-2">
+                      <div class="price-tag text-white px-3 py-1 rounded-full font-bold text-sm shadow-lg">
+                        {{ formatarPreco(imovel.valor_venda) }}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Content -->
+                  <div class="flex-1 p-4">
+                    <h3 class="text-lg font-bold text-gray-800 mb-1 line-clamp-1">
+                      {{ imovel.tipo_imovel }} - {{ imovel.bairro }}
+                    </h3>
+                    
+                    <p class="text-gray-600 text-sm mb-3 flex items-center gap-1">
+                      <i class="fas fa-map-marker-alt text-purple-500"></i>
+                      {{ imovel.bairro }}, {{ imovel.cidade }} - {{ imovel.estado }}
+                    </p>
+                    
+                    <!-- Features -->
+                    <div class="flex flex-wrap gap-3 text-sm text-gray-700">
+                      <div v-if="imovel.dormitorios" class="flex items-center gap-1">
+                        <i class="fas fa-bed text-purple-500"></i>
+                        <span>{{ imovel.dormitorios }} quartos</span>
+                      </div>
+                      <div v-if="imovel.suites" class="flex items-center gap-1">
+                        <i class="fas fa-bath text-purple-500"></i>
+                        <span>{{ imovel.suites }} suítes</span>
+                      </div>
+                      <div v-if="imovel.garagem" class="flex items-center gap-1">
+                        <i class="fas fa-car text-purple-500"></i>
+                        <span>{{ imovel.garagem }} vagas</span>
+                      </div>
+                      <div v-if="imovel.area_total" class="flex items-center gap-1">
+                        <i class="fas fa-ruler-combined text-purple-500"></i>
+                        <span>{{ imovel.area_total }}m²</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Map (Right Side) -->
+        <div class="split-view-map">
+          <PropertyMap 
+            :imoveis="imoveisFiltrados"
+            @property-click="abrirModal"
+            ref="splitViewMap"
+          />
+        </div>
+      </div>
     </section>
     
     <!-- Properties Grid -->
@@ -471,7 +574,8 @@ const loading = ref(true)
 const modalAberto = ref(false)
 const imovelSelecionado = ref({})
 const slideshowAtual = ref(0)
-const modoVisualizacao = ref('grid') // 'grid' ou 'mapa'
+const modoVisualizacao = ref('grid') // 'grid', 'mapa', ou 'split'
+const splitViewMap = ref(null)
 const filters = ref({
   search: '',
   tipo: '',
@@ -659,6 +763,16 @@ const limparFiltros = () => {
   }
 }
 
+const highlightMarker = (imovel) => {
+  // TODO: Implement marker highlighting on map when hovering over list item
+  console.log('Highlight marker for:', imovel.codigo_imovel)
+}
+
+const unhighlightMarker = () => {
+  // TODO: Remove marker highlight
+  console.log('Unhighlight marker')
+}
+
 onMounted(() => {
   carregarImoveis()
 })
@@ -768,4 +882,75 @@ onMounted(() => {
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
+
+/* Split View Styles */
+.split-view-container {
+  display: flex;
+  height: calc(100vh - 80px);
+  position: relative;
+}
+
+.split-view-list {
+  flex: 0 0 45%;
+  max-width: 600px;
+  overflow: hidden;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.split-view-scroll {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.split-view-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.split-view-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.split-view-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.split-view-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.split-view-map {
+  flex: 1;
+  position: relative;
+}
+
+.split-property-card {
+  transition: all 0.3s ease;
+}
+
+.split-property-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+  .split-view-container {
+    flex-direction: column;
+    height: auto;
+  }
+  
+  .split-view-list {
+    flex: none;
+    max-width: 100%;
+    max-height: 50vh;
+  }
+  
+  .split-view-map {
+    height: 50vh;
+  }
+}
+
 </style>
