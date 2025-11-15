@@ -713,3 +713,38 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('/conversas/{id}', 'ConversasController@show');
     $router->post('/conversas/{id}/mensagens', 'ConversasController@sendMessage');
 });
+
+// Trigger sync remoto (debug)
+$router->get('/debug/trigger-sync', function () {
+    try {
+        set_time_limit(600); // 10 minutos
+        ini_set('memory_limit', '512M');
+        
+        $syncWorker = base_path('sync_worker.php');
+        
+        if (!file_exists($syncWorker)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'sync_worker.php not found'
+            ], 404);
+        }
+        
+        // Executar sync worker
+        ob_start();
+        include $syncWorker;
+        $output = ob_get_clean();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Sync completed',
+            'output' => $output
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
