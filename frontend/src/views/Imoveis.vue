@@ -99,6 +99,16 @@
               </select>
             </div>
             
+            <div class="grid md:grid-cols-4 gap-4 mb-4">
+              <select v-model="filters.ordenarPor" class="px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-gray-700 transition">
+                <option value="">Ordenar por</option>
+                <option value="preco-asc">💰 Menor Preço</option>
+                <option value="preco-desc">💰 Maior Preço</option>
+                <option value="quartos-desc">🛏️ Mais Quartos</option>
+                <option value="area-desc">📐 Maior Área</option>
+              </select>
+            </div>
+            
             <div class="flex flex-wrap gap-2">
               <button 
                 @click="limparFiltros"
@@ -466,7 +476,8 @@ const filters = ref({
   search: '',
   tipo: '',
   quartos: '',
-  faixaPreco: ''
+  faixaPreco: '',
+  ordenarPor: ''
 })
 
 const totalImoveis = computed(() => imoveis.value.length)
@@ -504,6 +515,42 @@ const imoveisFiltrados = computed(() => {
       const preco = parseFloat(i.valor_venda)
       return preco >= min && preco <= max
     })
+  }
+  
+  // Ordenação
+  if (filters.value.ordenarPor) {
+    result = [...result] // Create a copy to avoid mutating the original array
+    
+    switch (filters.value.ordenarPor) {
+      case 'preco-asc':
+        result.sort((a, b) => {
+          const precoA = parseFloat(a.valor_venda) || 0
+          const precoB = parseFloat(b.valor_venda) || 0
+          return precoA - precoB
+        })
+        break
+      case 'preco-desc':
+        result.sort((a, b) => {
+          const precoA = parseFloat(a.valor_venda) || 0
+          const precoB = parseFloat(b.valor_venda) || 0
+          return precoB - precoA
+        })
+        break
+      case 'quartos-desc':
+        result.sort((a, b) => {
+          const quartosA = parseInt(a.dormitorios) || 0
+          const quartosB = parseInt(b.dormitorios) || 0
+          return quartosB - quartosA
+        })
+        break
+      case 'area-desc':
+        result.sort((a, b) => {
+          const areaA = parseFloat(a.area_total) || 0
+          const areaB = parseFloat(b.area_total) || 0
+          return areaB - areaA
+        })
+        break
+    }
   }
   
   return result
@@ -596,7 +643,8 @@ const limparFiltros = () => {
     search: '',
     tipo: '',
     quartos: '',
-    faixaPreco: ''
+    faixaPreco: '',
+    ordenarPor: ''
   }
 }
 
