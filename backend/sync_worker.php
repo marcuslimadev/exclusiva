@@ -20,6 +20,75 @@ define('API_TOKEN', '$2y$10$Lcn1ct.wEfBonZldcjuVQ.pD5p8gBRNrPlHjVwruaG5HAui2XCG9
 define('API_BASE', 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel');
 define('FORCE_FULL_UPDATE', false); // Forçar atualização completa (ignora cache de 4 horas)
 
+/**
+ * Formata descrição de texto plano para HTML
+ */
+function format_description_html($text) {
+    if (empty($text)) {
+        return null;
+    }
+    
+    // Remove espaços extras
+    $text = trim($text);
+    
+    // Converte quebras de linha em <br> temporariamente
+    $text = str_replace(["\r\n", "\r", "\n"], "|||BR|||", $text);
+    
+    // Processa emojis e marcadores especiais
+    $html = '';
+    $lines = explode("|||BR|||", $text);
+    $inList = false;
+    
+    foreach ($lines as $line) {
+        $line = trim($line);
+        
+        if (empty($line)) {
+            if ($inList) {
+                $html .= '</ul>';
+                $inList = false;
+            }
+            $html .= '<br>';
+            continue;
+        }
+        
+        // Detecta títulos com emojis (🏡, ✨, 🌟, 💰, etc)
+        if (preg_match('/^[🏡✨🌟💰🚗📄🎯🔑⭐🎉]/', $line)) {
+            if ($inList) {
+                $html .= '</ul>';
+                $inList = false;
+            }
+            $html .= '<h3>' . htmlspecialchars($line) . '</h3>';
+        }
+        // Detecta itens de lista (começa com -, *, •, ou emoji seguido de **)
+        elseif (preg_match('/^[\-\*•]/', $line) || preg_match('/^\*\*/', $line)) {
+            if (!$inList) {
+                $html .= '<ul>';
+                $inList = true;
+            }
+            // Remove o marcador inicial
+            $item = preg_replace('/^[\-\*•]\s*/', '', $line);
+            $item = preg_replace('/^\*\*([^:]+):\*\*/', '<strong>$1:</strong>', $item);
+            $html .= '<li>' . htmlspecialchars($item) . '</li>';
+        }
+        // Linha normal
+        else {
+            if ($inList) {
+                $html .= '</ul>';
+                $inList = false;
+            }
+            // Detecta negrito **texto**
+            $line = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $line);
+            $html .= '<p>' . htmlspecialchars($line, ENT_NOQUOTES) . '</p>';
+        }
+    }
+    
+    if ($inList) {
+        $html .= '</ul>';
+    }
+    
+    return $html;
+}
+
 $lockFile = sys_get_temp_dir() . '/sync_2phase.lock';
 $lock = fopen($lockFile, 'c+');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
@@ -409,7 +478,7 @@ function upsert_detalhes($d)
             'longitude' => $longitude,
             'area_privativa' => $area_privativa,
             'area_total' => $area_total,
-            'descricao' => $d['descricaoImovel'] ?? null,
+            'descricao' => format_description_html($d['descricaoImovel'] ?? null),
             'imagem_destaque' => $imagem_destaque,
             'imagens' => json_encode($imagens),
             'caracteristicas' => json_encode($caracteristicas),

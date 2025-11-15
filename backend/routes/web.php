@@ -427,6 +427,124 @@ $router->get('/debug/count-properties', function () {
             'success' => false
         ], 500);
     }
+});
+
+// Converter descrições para HTML (TEMPORÁRIO)
+$router->get('/debug/convert-descriptions-html', function () {
+    try {
+        set_time_limit(300);
+        
+        // Função de formatação
+        $formatHtml = function($text) {
+            if (empty($text)) return null;
+            
+            $text = trim($text);
+            $text = str_replace(["\r\n", "\r", "\n"], "|||BR|||", $text);
+            
+            $html = '';
+            $lines = explode("|||BR|||", $text);
+            $inList = false;
+            
+            foreach ($lines as $line) {
+                $line = trim($line);
+                
+                if (empty($line)) {
+                    if ($inList) {
+                        $html .= '</ul>';
+                        $inList = false;
+                    }
+                    $html .= '<br>';
+                    continue;
+                }
+                
+                // Títulos com emojis
+                if (preg_match('/^[🏡✨🌟💰🚗📄🎯🔑⭐🎉]/', $line)) {
+                    if ($inList) {
+                        $html .= '</ul>';
+                        $inList = false;
+                    }
+                    $html .= '<h3>' . htmlspecialchars($line) . '</h3>';
+                }
+                // Itens de lista
+                elseif (preg_match('/^[\-\*•]/', $line) || preg_match('/^\*\*/', $line)) {
+                    if (!$inList) {
+                        $html .= '<ul>';
+                        $inList = true;
+                    }
+                    $item = preg_replace('/^[\-\*•]\s*/', '', $line);
+                    $item = preg_replace('/^\*\*([^:]+):\*\*/', '<strong>$1:</strong>', $item);
+                    $html .= '<li>' . htmlspecialchars($item, ENT_NOQUOTES) . '</li>';
+                }
+                // Linha normal
+                else {
+                    if ($inList) {
+                        $html .= '</ul>';
+                        $inList = false;
+                    }
+                    $line = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $line);
+                    $html .= '<p>' . htmlspecialchars($line, ENT_NOQUOTES) . '</p>';
+                }
+            }
+            
+            if ($inList) {
+                $html .= '</ul>';
+            }
+            
+            return $html;
+        };
+        
+        $db = app('db');
+        $properties = $db->table('imo_properties')
+            ->whereNotNull('descricao')
+            ->where('descricao', '!=', '')
+            ->select('id', 'codigo_imovel', 'descricao')
+            ->get();
+        
+        $updated = 0;
+        $skipped = 0;
+        $samples = [];
+        
+        foreach ($properties as $prop) {
+            // Verifica se já está em HTML
+            if (strpos($prop->descricao, '<') !== false) {
+                $skipped++;
+                continue;
+            }
+            
+            $htmlDesc = $formatHtml($prop->descricao);
+            
+            if ($htmlDesc) {
+                $db->table('imo_properties')
+                    ->where('id', $prop->id)
+                    ->update(['descricao' => $htmlDesc]);
+                
+                $updated++;
+                
+                // Guardar amostra dos primeiros 3
+                if (count($samples) < 3) {
+                    $samples[] = [
+                        'codigo' => $prop->codigo_imovel,
+                        'original' => substr($prop->descricao, 0, 200),
+                        'html' => substr($htmlDesc, 0, 300)
+                    ];
+                }
+            }
+        }
+        
+        return response()->json([
+            'success' => true,
+            'total' => count($properties),
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'samples' => $samples
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ], 500);
+    }
 });// Run migrations (TEMPORÁRIO)
 $router->get('/debug/migrate', function () {
     try {
