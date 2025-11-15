@@ -68,6 +68,51 @@
         </div>
       </div>
     </transition>
+    
+    <!-- Keyboard Shortcuts Help -->
+    <transition name="fade">
+      <div v-if="showKeyboardHelp" class="keyboard-help-overlay">
+        <div class="keyboard-help-content">
+          <div class="keyboard-help-header">
+            <h3><i class="fas fa-keyboard mr-2"></i>Atalhos do Teclado</h3>
+            <button @click="showKeyboardHelp = false" class="close-help-btn">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="keyboard-shortcuts">
+            <div class="shortcut-item">
+              <kbd>Ctrl</kbd> + <kbd>↑↓←→</kbd>
+              <span>Mover mapa</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Ctrl</kbd> + <kbd>+</kbd>
+              <span>Zoom in</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Ctrl</kbd> + <kbd>-</kbd>
+              <span>Zoom out</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>Esc</kbd>
+              <span>Fechar popup</span>
+            </div>
+            <div class="shortcut-item">
+              <kbd>?</kbd>
+              <span>Mostrar/ocultar ajuda</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+    
+    <!-- Help Button -->
+    <button 
+      @click="showKeyboardHelp = !showKeyboardHelp" 
+      class="keyboard-help-btn"
+      title="Atalhos do teclado (pressione ?)"
+    >
+      <i class="fas fa-question-circle"></i>
+    </button>
   </div>
 </template>
 
@@ -111,6 +156,7 @@ const hoveredProperty = ref(null)
 const previewCardPosition = ref({ x: 0, y: 0 })
 const drawControl = ref(null)
 const drawnItems = ref(null)
+const showKeyboardHelp = ref(false)
 
 // Map Configuration
 const mapConfig = {
@@ -733,6 +779,9 @@ onMounted(async () => {
       emit('property-click', imovel)
     }
   })
+  
+  // Keyboard navigation
+  window.addEventListener('keydown', handleKeyboardNavigation)
 })
 
 onBeforeUnmount(() => {
@@ -740,7 +789,71 @@ onBeforeUnmount(() => {
     map.value.remove()
     map.value = null
   }
+  
+  window.removeEventListener('keydown', handleKeyboardNavigation)
 })
+
+// Keyboard Navigation Handler
+const handleKeyboardNavigation = (e) => {
+  if (!map.value) return
+  
+  const panDistance = 100
+  const zoomStep = 1
+  
+  // Toggle help with '?'
+  if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault()
+    showKeyboardHelp.value = !showKeyboardHelp.value
+    return
+  }
+  
+  switch(e.key) {
+    case 'ArrowUp':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([0, -panDistance])
+      }
+      break
+    case 'ArrowDown':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([0, panDistance])
+      }
+      break
+    case 'ArrowLeft':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([-panDistance, 0])
+      }
+      break
+    case 'ArrowRight':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.panBy([panDistance, 0])
+      }
+      break
+    case '+':
+    case '=':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.zoomIn(zoomStep)
+      }
+      break
+    case '-':
+    case '_':
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        map.value.zoomOut(zoomStep)
+      }
+      break
+    case 'Escape':
+      // Close any open popups and help
+      map.value.closePopup()
+      hoveredProperty.value = null
+      showKeyboardHelp.value = false
+      break
+  }
+}
 </script>
 
 <style scoped>
@@ -1267,5 +1380,146 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(10px);
   border-radius: 8px !important;
 }
+
+/* Keyboard Help Overlay */
+.keyboard-help-btn {
+  position: absolute;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.keyboard-help-btn:hover {
+  background: white;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  transform: scale(1.05);
+}
+
+.keyboard-help-btn i {
+  color: #6366f1;
+  font-size: 24px;
+}
+
+.keyboard-help-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.keyboard-help-content {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.keyboard-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.keyboard-help-header h3 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #374151;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.keyboard-help-header i {
+  color: #6366f1;
+}
+
+.close-help-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+
+.close-help-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.keyboard-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.shortcut-item:hover {
+  background: #f3f4f6;
+  transform: translateX(4px);
+}
+
+.shortcut-item kbd {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  font-family: monospace;
+  font-weight: bold;
+  color: #374151;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 0.875rem;
+}
+
+.shortcut-item span {
+  flex: 1;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
 
 </style>
