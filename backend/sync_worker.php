@@ -18,7 +18,7 @@ ini_set('memory_limit', '512M');
 
 define('API_TOKEN', '$2y$10$Lcn1ct.wEfBonZldcjuVQ.pD5p8gBRNrPlHjVwruaG5HAui2XCG9O');
 define('API_BASE', 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel');
-define('FORCE_FULL_UPDATE', true); // Forçar atualização completa (ignora cache de 4 horas)
+define('FORCE_FULL_UPDATE', false); // Forçar atualização completa (ignora cache de 4 horas)
 
 $lockFile = sys_get_temp_dir() . '/sync_2phase.lock';
 $lock = fopen($lockFile, 'c+');
