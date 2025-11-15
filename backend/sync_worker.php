@@ -58,6 +58,98 @@ function call_api_get($url)
     return is_array($data) ? $data : null;
 }
 
+// ============== GEOCODIFICAÇÃO NOMINATIM ==============
+
+function geocode_address($endereco)
+{
+    // Montar query de busca
+    $logradouro = trim($endereco['logradouro'] ?? '');
+    $numero = trim($endereco['numero'] ?? '');
+    $bairro = trim($endereco['bairro'] ?? '');
+    $cidade = trim($endereco['cidade'] ?? '');
+    $estado = trim($endereco['estado'] ?? '');
+    
+    // Se não tem endereço mínimo, retorna null
+    if (empty($cidade) || (empty($logradouro) && empty($bairro))) {
+        return ['lat' => null, 'lng' => null];
+    }
+    
+    // Construir query de busca (do mais específico para o mais geral)
+    $queries = [];
+    
+    // Tentar com endereço completo
+    if ($logradouro && $numero) {
+        $queries[] = "{$logradouro}, {$numero}, {$bairro}, {$cidade}, {$estado}, Brasil";
+    }
+    
+    // Tentar sem número
+    if ($logradouro && $bairro) {
+        $queries[] = "{$logradouro}, {$bairro}, {$cidade}, {$estado}, Brasil";
+    }
+    
+    // Tentar apenas bairro + cidade
+    if ($bairro) {
+        $queries[] = "{$bairro}, {$cidade}, {$estado}, Brasil";
+    }
+    
+    // Tentar apenas cidade
+    $queries[] = "{$cidade}, {$estado}, Brasil";
+    
+    foreach ($queries as $query) {
+        $coords = nominatim_search($query);
+        if ($coords['lat'] && $coords['lng']) {
+            echo "   🗺️  Geocodificado: {$query}\n";
+            return $coords;
+        }
+        
+        // Rate limiting: Nominatim exige 1 segundo entre requests
+        usleep(1100000); // 1.1 segundos
+    }
+    
+    echo "   ⚠️  Não foi possível geocodificar: {$cidade}, {$estado}\n";
+    return ['lat' => null, 'lng' => null];
+}
+
+function nominatim_search($query)
+{
+    $url = 'https://nominatim.openstreetmap.org/search?' . http_build_query([
+        'q' => $query,
+        'format' => 'json',
+        'limit' => 1,
+        'addressdetails' => 1,
+        'countrycodes' => 'br'
+    ]);
+    
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_HTTPHEADER => [
+            'User-Agent: Exclusiva-Lar-Sync/3.0 (contato@exclusivalarimoveis.com.br)'
+        ]
+    ]);
+    
+    $resp = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200) {
+        return ['lat' => null, 'lng' => null];
+    }
+    
+    $data = json_decode($resp, true);
+    
+    if (is_array($data) && count($data) > 0) {
+        return [
+            'lat' => $data[0]['lat'] ?? null,
+            'lng' => $data[0]['lon'] ?? null
+        ];
+    }
+    
+    return ['lat' => null, 'lng' => null];
+}
+
 // ============== FASE 1: SALVAR LISTA COMPLETA ==============
 
 function upsert_basico($row)
@@ -225,6 +317,17 @@ function upsert_detalhes($d)
         $valor_aluguel = $d['valorEsperado'] ?? null;
     }
     
+    // Coordenadas - tentar da API primeiro, depois geocodificar
+    $latitude = $d['endereco']['latitude'] ?? null;
+    $longitude = $d['endereco']['longitude'] ?? null;
+    
+    // Se não tem coordenadas, tentar geocodificar pelo endereço
+    if (empty($latitude) || empty($longitude)) {
+        $coords = geocode_address($d['endereco'] ?? []);
+        $latitude = $coords['lat'];
+        $longitude = $coords['lng'];
+    }
+    
     // Coletar imagens em array JSON
     $imagens = [];
     $imagem_destaque = null;
@@ -273,8 +376,8 @@ function upsert_detalhes($d)
             'endereco' => $d['endereco']['logradouro'] ?? null,
             'numero' => $d['endereco']['numero'] ?? null,
             'cep' => $d['endereco']['cep'] ?? null,
-            'latitude' => $d['endereco']['latitude'] ?? null,
-            'longitude' => $d['endereco']['longitude'] ?? null,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
             'area_privativa' => $area_privativa,
             'area_total' => $area_total,
             'descricao' => $d['descricaoImovel'] ?? null,
