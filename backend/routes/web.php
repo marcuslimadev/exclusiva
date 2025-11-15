@@ -771,6 +771,7 @@ $router->get('/debug/force-fase2', function () use ($router) {
         $total = count($imoveis);
         $updated = 0;
         $errors = [];
+        $skipped = [];
         
         define('API_TOKEN', '$2y$10$Lcn1ct.wEfBonZldcjuVQ.pD5p8gBRNrPlHjVwruaG5HAui2XCG9O');
         define('API_BASE', 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel');
@@ -828,10 +829,22 @@ $router->get('/debug/force-fase2', function () use ($router) {
                 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 curl_close($ch);
                 
-                if ($httpCode !== 200) continue;
+                if ($httpCode !== 200) {
+                    $skipped[] = [
+                        'codigo' => $imovel->codigo_imovel,
+                        'reason' => 'HTTP ' . $httpCode
+                    ];
+                    continue;
+                }
                 
                 $data = json_decode($response, true);
-                if (!isset($data['imovel'])) continue;
+                if (!isset($data['imovel'])) {
+                    $skipped[] = [
+                        'codigo' => $imovel->codigo_imovel,
+                        'reason' => 'No imovel data'
+                    ];
+                    continue;
+                }
                 
                 $d = $data['imovel'];
                 
@@ -865,6 +878,8 @@ $router->get('/debug/force-fase2', function () use ($router) {
             'limit' => $limit,
             'processed' => count($imoveis),
             'updated' => $updated,
+            'skipped' => count($skipped),
+            'skipped_samples' => array_slice($skipped, 0, 3),
             'errors' => count($errors),
             'error_samples' => array_slice($errors, 0, 3),
             'total_db' => $totalDb,
