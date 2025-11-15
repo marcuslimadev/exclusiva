@@ -3,6 +3,8 @@
  * Worker de sincronização de imóveis - Duas fases
  * Fase 1: Percorre TODAS as páginas e salva dados básicos
  * Fase 2: Busca detalhes apenas dos imóveis que precisam atualização
+ * 
+ * VERSÃO CORRIGIDA - Schema PostgreSQL
  */
 
 require __DIR__.'/vendor/autoload.php';
@@ -26,6 +28,7 @@ if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
 
 $now = date('Y-m-d H:i:s');
 echo "🚀 Iniciando sincronização em duas fases em {$now}\n";
+echo "📌 Versão: 3.0 - Backend Lumen + PostgreSQL\n";
 
 // ============== HELPERS DE API ==============
 
@@ -39,7 +42,7 @@ function call_api_get($url)
         CURLOPT_HTTPHEADER => [
             'Accept: application/json',
             'token: ' . API_TOKEN,
-            'User-Agent: Sync-Worker-2Phase/1.0'
+            'User-Agent: Sync-Worker-Backend/3.0'
         ]
     ]);
     $resp = curl_exec($ch);
@@ -59,25 +62,30 @@ function call_api_get($url)
 
 function upsert_basico($row)
 {
-    $pdo = pdo();
+    // Mapear finalidade para valores aceitos pelo schema
+    $finalidade_raw = $row['finalidadeImovel'] ?? 'Venda';
+    $finalidade_map = [
+        'Locação' => 'Aluguel',
+        'Venda' => 'Venda',
+        'Aluguel' => 'Aluguel',
+        'Venda/Aluguel' => 'Venda/Aluguel',
+        'Venda / Aluguel' => 'Venda/Aluguel',
+    ];
+    $finalidade = $finalidade_map[$finalidade_raw] ?? 'Venda';
     
-    $sql = "INSERT INTO imoveis 
-        (codigo, referencia, atualizado_em, cadastrado_em, status_ativo)
-        VALUES (?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-        referencia = VALUES(referencia),
-        atualizado_em = VALUES(atualizado_em),
-        cadastrado_em = VALUES(cadastrado_em),
-        status_ativo = VALUES(status_ativo)";
+    $data = [
+        'codigo_imovel' => $row['codigoImovel'],
+        'referencia_imovel' => $row['referenciaImovel'] ?? null,
+        'finalidade_imovel' => $finalidade,
+        'tipo_imovel' => $row['descricaoTipoImovel'] ?? 'Residencial',
+        'active' => ($row['statusImovel'] ?? false) ? 1 : 0,
+        'updated_at' => date('Y-m-d H:i:s'),
+    ];
     
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        $row['codigoImovel'],
-        $row['referenciaImovel'] ?? null,
-        $row['ultimaAtualizacaoImovel'] ?? null,
-        $row['dataInsercaoImovel'] ?? null,
-        ($row['statusImovel'] ?? false) ? 1 : 0
-    ]);
+    DB::table('imo_properties')->updateOrInsert(
+        ['codigo_imovel' => $data['codigo_imovel']],
+        $data
+    );
 }
 
 echo "\n📋 FASE 1: Salvando lista completa de imóveis...\n";
@@ -88,7 +96,6 @@ $totalSaved = 0;
 $maxPages = 999;
 
 do {
-    // Tentar GET com page/per_page (padrão que funciona)
     $url = API_BASE . "/lista?status=ativo&page={$page}&per_page=100";
     echo "📄 Página {$page}: {$url}\n";
     
@@ -112,7 +119,6 @@ do {
     
     $page++;
     
-    // Proteção contra loop infinito
     if ($page > $maxPages) {
         echo "⚠ Atingido limite de {$maxPages} páginas. Parando.\n";
         break;
@@ -128,21 +134,17 @@ echo "════════════════════════�
 echo "\n📝 FASE 2: Buscando detalhes dos imóveis...\n";
 echo "════════════════════════════════════════════════════════════════\n";
 
-// Coletar IDs que precisam de atualização (sem detalhes ou desatualizados)
-$pdo = pdo();
-$stmt = $pdo->query("
-    SELECT codigo 
-    FROM imoveis 
-    WHERE descricao IS NULL 
-       OR cidade IS NULL 
-       OR atualizado_em < DATE_SUB(NOW(), INTERVAL 4 HOUR)
-    ORDER BY atualizado_em ASC NULLS FIRST
-");
+$fourHoursAgo = date('Y-m-d H:i:s', strtotime('-4 hours'));
 
-$ids = [];
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $ids[] = $row['codigo'];
-}
+$ids = DB::table('imo_properties')
+    ->where(function($query) use ($fourHoursAgo) {
+        $query->whereNull('descricao')
+              ->orWhereNull('cidade')
+              ->orWhere('updated_at', '<', $fourHoursAgo);
+    })
+    ->orderBy('updated_at', 'asc')
+    ->pluck('codigo_imovel')
+    ->toArray();
 
 echo "   ℹ️  Total de imóveis para atualizar: " . count($ids) . "\n\n";
 
@@ -162,13 +164,11 @@ foreach ($ids as $codigo) {
         
         $imovel = $det['resultSet'];
         
-        // Atualizar com detalhes completos
         upsert_detalhes($imovel);
         
         echo "✓ Imóvel {$codigo} atualizado\n";
         $updated++;
         
-        // Rate limiting
         usleep(100000); // 0.1s entre requisições
         
     } catch (Exception $e) {
@@ -184,8 +184,6 @@ echo "════════════════════════�
 
 function upsert_detalhes($d)
 {
-    $pdo = pdo();
-    
     // Áreas
     $area_privativa = null;
     if (isset($d['area']['privativa']['valor'])) {
@@ -202,80 +200,92 @@ function upsert_detalhes($d)
         $area_terreno = (float)str_replace(',', '.', $d['area']['terreno']['valor']);
     }
     
-    // SQL de atualização
-    $sql = "UPDATE imoveis SET
-        finalidade = ?,
-        tipo = ?,
-        dormitorios = ?,
-        suites = ?,
-        banheiros = ?,
-        salas = ?,
-        garagem = ?,
-        acomodacoes = ?,
-        ano_construcao = ?,
-        valor = ?,
-        cidade = ?,
-        estado = ?,
-        bairro = ?,
-        logradouro = ?,
-        numero = ?,
-        cep = ?,
-        area_privativa = ?,
-        area_total = ?,
-        terreno = ?,
-        descricao = ?,
-        atualizado_em = ?
-        WHERE codigo = ?";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        $d['finalidadeImovel'] ?? null,
-        $d['descricaoTipoImovel'] ?? null,
-        $d['dormitorios'] ?? 0,
-        $d['suites'] ?? 0,
-        $d['banheiros'] ?? 0,
-        $d['salas'] ?? 0,
-        $d['garagem'] ?? 0,
-        $d['acomodacoes'] ?? 0,
-        $d['anoConstrucao'] ?? null,
-        $d['valorEsperado'] ?? null,
-        $d['endereco']['cidade'] ?? null,
-        $d['endereco']['estado'] ?? null,
-        $d['endereco']['bairro'] ?? null,
-        $d['endereco']['logradouro'] ?? null,
-        $d['endereco']['numero'] ?? null,
-        $d['endereco']['cep'] ?? null,
-        $area_privativa,
-        $area_total,
-        $area_terreno,
-        $d['descricaoImovel'] ?? null,
-        $d['atualizadoEm'] ?? date('Y-m-d H:i:s'),
-        $d['codigoImovel']
-    ]);
-    
     $codigo = $d['codigoImovel'];
     
-    // Atualizar imagens
-    $pdo->prepare('DELETE FROM imoveis_imagens WHERE codigo=?')->execute([$codigo]);
+    // Mapear finalidade para valores aceitos pelo schema
+    $finalidade_raw = $d['finalidadeImovel'] ?? 'Venda';
+    $finalidade_map = [
+        'Locação' => 'Aluguel',
+        'Venda' => 'Venda',
+        'Aluguel' => 'Aluguel',
+        'Venda/Aluguel' => 'Venda/Aluguel',
+        'Venda / Aluguel' => 'Venda/Aluguel',
+    ];
+    $finalidade = $finalidade_map[$finalidade_raw] ?? 'Venda';
+    
+    // Determinar valores (venda/aluguel baseado na finalidade)
+    $valor_venda = null;
+    $valor_aluguel = null;
+    $finalidade_lower = strtolower($finalidade);
+    
+    if (strpos($finalidade_lower, 'venda') !== false) {
+        $valor_venda = $d['valorEsperado'] ?? null;
+    }
+    if (strpos($finalidade_lower, 'aluguel') !== false) {
+        $valor_aluguel = $d['valorEsperado'] ?? null;
+    }
+    
+    // Coletar imagens em array JSON
+    $imagens = [];
+    $imagem_destaque = null;
     if (!empty($d['imagens'])) {
-        $stmt = $pdo->prepare('INSERT INTO imoveis_imagens (codigo, url, destaque) VALUES (?,?,?)');
         foreach ($d['imagens'] as $img) {
-            $url = $img['url'] ?? null;
-            $dest = ($img['destaque'] ?? false) ? 1 : 0;
-            if ($url) $stmt->execute([$codigo, $url, $dest]);
+            $imagens[] = [
+                'url' => $img['url'],
+                'destaque' => (bool)($img['destaque'] ?? false)
+            ];
+            if (($img['destaque'] ?? false) && !$imagem_destaque) {
+                $imagem_destaque = $img['url'];
+            }
         }
     }
     
-    // Atualizar características
-    $pdo->prepare('DELETE FROM imoveis_caracteristicas WHERE codigo=?')->execute([$codigo]);
+    // Se não tem imagem destaque, pega a primeira
+    if (!$imagem_destaque && !empty($imagens)) {
+        $imagem_destaque = $imagens[0]['url'];
+    }
+    
+    // Coletar características em array JSON
+    $caracteristicas = [];
     if (!empty($d['caracteristicas'])) {
-        $stmt = $pdo->prepare('INSERT INTO imoveis_caracteristicas (codigo, grupo, nome) VALUES (?,?,?)');
         foreach ($d['caracteristicas'] as $c) {
-            $g = $c['nomeGrupo'] ?? null;
-            $n = $c['nomeCaracteristica'] ?? null;
-            if ($n) $stmt->execute([$codigo, $g, $n]);
+            $caracteristicas[] = $c['nomeCaracteristica'];
         }
     }
+    
+    // Atualizar dados principais
+    DB::table('imo_properties')
+        ->where('codigo_imovel', $codigo)
+        ->update([
+            'finalidade_imovel' => $finalidade,
+            'tipo_imovel' => $d['descricaoTipoImovel'] ?? 'Residencial',
+            'dormitorios' => $d['dormitorios'] ?? 0,
+            'suites' => $d['suites'] ?? 0,
+            'banheiros' => $d['banheiros'] ?? 0,
+            'garagem' => $d['garagem'] ?? 0,
+            'valor_venda' => $valor_venda,
+            'valor_aluguel' => $valor_aluguel,
+            'iptu' => $d['valorIPTU'] ?? null,
+            'condominio' => $d['valorCondominio'] ?? null,
+            'cidade' => $d['endereco']['cidade'] ?? null,
+            'estado' => $d['endereco']['estado'] ?? null,
+            'bairro' => $d['endereco']['bairro'] ?? null,
+            'endereco' => $d['endereco']['logradouro'] ?? null,
+            'numero' => $d['endereco']['numero'] ?? null,
+            'cep' => $d['endereco']['cep'] ?? null,
+            'latitude' => $d['endereco']['latitude'] ?? null,
+            'longitude' => $d['endereco']['longitude'] ?? null,
+            'area_privativa' => $area_privativa,
+            'area_total' => $area_total,
+            'descricao' => $d['descricaoImovel'] ?? null,
+            'imagem_destaque' => $imagem_destaque,
+            'imagens' => json_encode($imagens),
+            'caracteristicas' => json_encode($caracteristicas),
+            'em_condominio' => ($d['emCondominio'] ?? false) ? 1 : 0,
+            'aceita_financiamento' => ($d['aceitaFinanciamento'] ?? false) ? 1 : 0,
+            'exibir_imovel' => ($d['exibirImovel'] ?? false) ? 1 : 0,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
 }
 
 echo "\n🎉 SINCRONIZAÇÃO COMPLETA!\n";
