@@ -406,18 +406,19 @@ class PropertySyncService
         $apiKey = env('OPENAI_API_KEY');
         if (!$apiKey) {
             Log::warning('OpenAI API key não configurada, usando descrição original');
-            return $descricao;
+            // Return description with HTML entities properly encoded
+            return htmlspecialchars_decode($descricao, ENT_QUOTES | ENT_HTML5);
         }
 
         try {
-            $prompt = "Você é um especialista em marketing imobiliário. Formate esta descrição de imóvel de forma profissional, atrativa e organizada. Mantenha todas as informações importantes, mas torne-a mais vendável e bem estruturada. Use emojis apropriados e organize em tópicos quando necessário. Texto original:\n\n" . $descricao;
+            $prompt = "Você é um especialista em marketing imobiliário. Formate esta descrição de imóvel de forma profissional, atrativa e organizada em HTML. Use tags HTML apropriadas como <p>, <strong>, <ul>, <li> para estruturar o conteúdo. Mantenha todas as informações importantes, mas torne-a mais vendável e bem estruturada. Use emojis apropriados. Texto original:\n\n" . $descricao;
 
             $data = [
                 'model' => 'gpt-4o-mini',
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'Você é um especialista em marketing imobiliário. Sua função é transformar descrições de imóveis em textos atraentes, bem formatados e profissionais.'
+                        'content' => 'Você é um especialista em marketing imobiliário. Sua função é transformar descrições de imóveis em textos atraentes, bem formatados e profissionais usando HTML. Use tags como <p>, <strong>, <ul>, <li>, <br> para formatação.'
                     ],
                     [
                         'role' => 'user',
@@ -446,27 +447,31 @@ class PropertySyncService
 
             if ($error) {
                 Log::warning('OpenAI curl error: ' . $error);
-                return $descricao;
+                return htmlspecialchars_decode($descricao, ENT_QUOTES | ENT_HTML5);
             }
 
             if ($httpCode !== 200) {
                 Log::warning('OpenAI HTTP error: ' . $httpCode . ' - ' . $response);
-                return $descricao;
+                return htmlspecialchars_decode($descricao, ENT_QUOTES | ENT_HTML5);
             }
 
             $result = json_decode($response, true);
             
             if (json_last_error() !== JSON_ERROR_NONE) {
                 Log::warning('OpenAI JSON parse error: ' . json_last_error_msg());
-                return $descricao;
+                return htmlspecialchars_decode($descricao, ENT_QUOTES | ENT_HTML5);
             }
 
             if (!isset($result['choices'][0]['message']['content'])) {
                 Log::warning('OpenAI response format error', ['response' => $result]);
-                return $descricao;
+                return htmlspecialchars_decode($descricao, ENT_QUOTES | ENT_HTML5);
             }
 
             $textoFormatado = trim($result['choices'][0]['message']['content']);
+            
+            // Remove markdown code blocks if present (```html ... ```)
+            $textoFormatado = preg_replace('/```html\s*(.*?)\s*```/s', '$1', $textoFormatado);
+            $textoFormatado = preg_replace('/```\s*(.*?)\s*```/s', '$1', $textoFormatado);
             
             Log::info('✨ Descrição formatada com sucesso via OpenAI');
             
@@ -478,8 +483,8 @@ class PropertySyncService
                 'descricao_original' => substr($descricao, 0, 100) . '...'
             ]);
             
-            // Em caso de erro, retornar descrição original
-            return $descricao;
+            // Em caso de erro, retornar descrição original com HTML decodificado
+            return htmlspecialchars_decode($descricao, ENT_QUOTES | ENT_HTML5);
         }
     }
 }

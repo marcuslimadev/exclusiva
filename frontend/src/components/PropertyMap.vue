@@ -877,7 +877,7 @@ const handleKeyboardNavigation = (e) => {
   top: 1rem;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: 400;
   pointer-events: none;
 }
 
@@ -900,7 +900,7 @@ const handleKeyboardNavigation = (e) => {
   bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: 400;
   background: rgba(99, 102, 241, 0.95);
   backdrop-filter: blur(10px);
   color: white;
@@ -952,7 +952,7 @@ const handleKeyboardNavigation = (e) => {
 /* Hover Preview Card */
 .hover-preview-card {
   position: absolute;
-  z-index: 1001;
+  z-index: 500;
   background: white;
   border-radius: 12px;
   overflow: hidden;
@@ -1386,7 +1386,7 @@ const handleKeyboardNavigation = (e) => {
   position: absolute;
   bottom: 2rem;
   right: 2rem;
-  z-index: 1000;
+  z-index: 400;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   width: 48px;
@@ -1420,7 +1420,7 @@ const handleKeyboardNavigation = (e) => {
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
-  z-index: 2000;
+  z-index: 600;
   display: flex;
   align-items: center;
   justify-content: center;

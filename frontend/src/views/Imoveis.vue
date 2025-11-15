@@ -343,11 +343,11 @@
     <transition name="fade">
       <div 
         v-if="modalAberto" 
-        class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4"
         @click.self="fecharModal"
       >
-        <div class="zoom-in bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-          <div class="relative">
+        <div class="zoom-in bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+          <div class="relative flex-shrink-0">
             <!-- Close Button -->
             <button 
               @click="fecharModal"
@@ -438,7 +438,7 @@
             </div>
             
             <!-- Content -->
-            <div class="p-8">
+            <div class="p-8 overflow-y-auto flex-1">
               <!-- Header -->
               <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
                 <hgroup>
@@ -485,9 +485,10 @@
                   <i class="fas fa-info-circle mr-2" aria-hidden="true"></i>Descrição
                 </h3>
                 <article class="bg-gray-50 rounded-xl p-6 prose max-w-none">
-                  <p class="text-gray-700 leading-relaxed whitespace-pre-line text-justify">
-                    {{ imovelSelecionado.descricao }}
-                  </p>
+                  <div 
+                    class="text-gray-700 leading-relaxed text-justify description-content"
+                    v-html="sanitizeAndFormatHTML(imovelSelecionado.descricao)"
+                  ></div>
                 </article>
               </section>
               
@@ -557,7 +558,7 @@
     <a 
       href="https://wa.me/553173341150?text=Olá!%20Vim%20do%20site%20e%20gostaria%20de%20mais%20informações" 
       target="_blank"
-      class="fixed bottom-8 right-8 whatsapp-button w-16 h-16 rounded-full flex items-center justify-center shadow-2xl z-40"
+      class="fixed bottom-8 right-8 whatsapp-button w-16 h-16 rounded-full flex items-center justify-center shadow-2xl z-[9998]"
     >
       <i class="fab fa-whatsapp text-3xl text-white"></i>
     </a>
@@ -715,6 +716,29 @@ const formatarPreco = (valor) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(valor)
+}
+
+// Sanitize and format HTML descriptions
+const sanitizeAndFormatHTML = (html) => {
+  if (!html) return ''
+  
+  // Create a temporary div to parse HTML
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = html
+  
+  // Remove potentially dangerous tags/attributes (basic XSS protection)
+  const dangerous = tempDiv.querySelectorAll('script, iframe, object, embed')
+  dangerous.forEach(el => el.remove())
+  
+  // Get the sanitized HTML
+  let sanitized = tempDiv.innerHTML
+  
+  // If there's no HTML content, treat as plain text and preserve line breaks
+  if (sanitized === html && !html.includes('<')) {
+    sanitized = html.replace(/\n/g, '<br>')
+  }
+  
+  return sanitized
 }
 
 const abrirModal = (imovel) => {
@@ -875,6 +899,72 @@ onMounted(() => {
   line-height: 1.75;
 }
 
+/* Description content styling */
+.description-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.description-content p {
+  margin-bottom: 1rem;
+}
+
+.description-content p:last-child {
+  margin-bottom: 0;
+}
+
+.description-content ul,
+.description-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.description-content li {
+  margin-bottom: 0.5rem;
+}
+
+.description-content strong,
+.description-content b {
+  font-weight: 600;
+  color: #374151;
+}
+
+.description-content em,
+.description-content i {
+  font-style: italic;
+}
+
+.description-content h1,
+.description-content h2,
+.description-content h3,
+.description-content h4 {
+  font-weight: 700;
+  color: #1f2937;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.description-content h1 {
+  font-size: 1.5rem;
+}
+
+.description-content h2 {
+  font-size: 1.25rem;
+}
+
+.description-content h3 {
+  font-size: 1.125rem;
+}
+
+.description-content a {
+  color: #6366f1;
+  text-decoration: underline;
+}
+
+.description-content a:hover {
+  color: #4f46e5;
+}
+
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.3s;
 }
@@ -888,6 +978,7 @@ onMounted(() => {
   display: flex;
   height: calc(100vh - 80px);
   position: relative;
+  z-index: 1;
 }
 
 .split-view-list {
@@ -896,6 +987,8 @@ onMounted(() => {
   overflow: hidden;
   border-right: 1px solid #e5e7eb;
   background: #f9fafb;
+  position: relative;
+  z-index: 2;
 }
 
 .split-view-scroll {
@@ -925,6 +1018,7 @@ onMounted(() => {
 .split-view-map {
   flex: 1;
   position: relative;
+  z-index: 1;
 }
 
 .split-property-card {
