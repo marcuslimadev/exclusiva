@@ -438,7 +438,7 @@
             </div>
             
             <!-- Content -->
-            <div class="p-8 overflow-y-auto flex-1">
+            <div class="p-8 overflow-y-auto flex-1 min-h-0">
               <!-- Header -->
               <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
                 <hgroup>
@@ -570,6 +570,71 @@ import { ref, computed, onMounted } from 'vue'
 import api from '../services/api'
 import PropertyMap from '../components/PropertyMap.vue'
 
+const removerAcentos = (texto) => {
+  if (!texto) return ''
+  return typeof texto.normalize === 'function'
+    ? texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    : texto
+}
+
+const prepararTextoBusca = (valor) => {
+  if (valor === undefined || valor === null) return ''
+  const texto = String(valor)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&[#A-Za-z0-9]+;/gi, ' ')
+  return removerAcentos(texto).toLowerCase()
+}
+
+const formatarTipoEtiqueta = (texto) => {
+  if (!texto) return ''
+  return texto
+    .split('/')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('/')
+}
+
+const inferirTipoImovel = (imovel) => {
+  const tipoAtual = (imovel?.tipo_imovel || '').toString().trim()
+  const tipoLower = tipoAtual.toLowerCase()
+
+  if (tipoLower && tipoLower !== 'residencial') {
+    return formatarTipoEtiqueta(tipoAtual)
+  }
+
+  const referenciaOriginal = (imovel?.referencia_imovel || '').toString().toLowerCase()
+  const textoReferencia = prepararTextoBusca(imovel?.referencia_imovel)
+  const textoDescricao = prepararTextoBusca(imovel?.descricao)
+  const textoBusca = `${tipoLower} ${textoReferencia} ${textoDescricao}`
+
+  if (textoBusca.includes('cobertura')) {
+    return 'Cobertura'
+  }
+
+  if (
+    referenciaOriginal.endsWith('ca') ||
+    textoBusca.includes('casa') ||
+    textoBusca.includes('sobrado')
+  ) {
+    return 'Casa'
+  }
+
+  if (textoBusca.includes('lote') || textoBusca.includes('terreno')) {
+    return 'Lote/Terreno'
+  }
+
+  if (
+    referenciaOriginal.endsWith('ap') ||
+    textoBusca.includes('apartamento') ||
+    textoBusca.includes('apto')
+  ) {
+    return 'Apartamento'
+  }
+
+  return tipoAtual || 'Residencial'
+}
+
 const imoveis = ref([])
 const loading = ref(true)
 const modalAberto = ref(false)
@@ -698,7 +763,10 @@ const carregarImoveis = async () => {
       if (!imovel.imagem_destaque && imovel.imagens.length > 0) {
         imovel.imagem_destaque = imovel.imagens[0].url
       }
-      
+
+      imovel.tipo_original = imovel.tipo_imovel
+      imovel.tipo_imovel = inferirTipoImovel(imovel)
+
       return imovel
     })
   } catch (error) {
