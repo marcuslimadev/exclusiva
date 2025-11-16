@@ -27,27 +27,104 @@ function format_description_html($text) {
     if (empty($text)) {
         return null;
     }
-    
-    // Remove tags <p> e </p> se existirem
-    $text = preg_replace('/<\/?p>/', '', $text);
-    
-    // Decodifica HTML entities (&amp; -> &, &lt; -> <, &gt; -> >, &ndash; -> –)
+
+    $normalized = normalize_description_text($text);
+
+    $aiFormatted = ai_format_description($normalized);
+    if (!empty($aiFormatted)) {
+        return $aiFormatted;
+    }
+
+    return build_fallback_description_html($normalized);
+}
+
+function normalize_description_text($text)
+{
     $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    
-    // Remove espaços extras
+    $text = preg_replace('/\x{00A0}/u', ' ', $text);
+    $text = preg_replace('/\s+/u', ' ', $text);
+    $text = preg_replace('/(\p{L})(\d)/u', '$1 $2', $text);
+    $text = preg_replace('/(\d)(\p{L})/u', '$1 $2', $text);
+    $text = preg_replace('/(\p{Ll})(\p{Lu})/u', '$1 $2', $text);
+    $text = preg_replace('/([^\s])R\$/u', '$1 R$', $text);
+    $text = preg_replace('/m\x{00B2}/u', 'm² ', $text);
+    return trim($text);
+}
+
+function ai_format_description($descricao)
+{
+    $apiKey = getenv('OPENAI_API_KEY');
+    if (!$apiKey) {
+        return null;
+    }
+
+    $systemPrompt = 'Você é especialista em marketing imobiliário. Gere descrições atraentes, estruturadas em HTML (<p>, <ul>, <li>, <strong>), corrigindo erros e garantindo texto conciso e topificado.';
+    $userPrompt = "Reescreva e organize a seguinte descrição de imóvel, mantendo todas as informações relevantes. Use marcadores quando fizer sentido e destaque os dados principais:
+
+{$descricao}";
+
+    $payload = [
+        'model' => 'gpt-4o-mini',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $userPrompt],
+        ],
+        'max_tokens' => 800,
+        'temperature' => 0.6,
+    ];
+
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey,
+        ],
+        CURLOPT_TIMEOUT => 45,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    if ($error || $httpCode !== 200) {
+        echo "⚠️  Falha ao usar OpenAI para descrição ({$httpCode}): {$error}
+";
+        return null;
+    }
+
+    $result = json_decode($response, true);
+    if (!isset($result['choices'][0]['message']['content'])) {
+        return null;
+    }
+
+    $content = trim($result['choices'][0]['message']['content']);
+    $content = preg_replace('/```html\s*(.*?)\s*```/s', '$1', $content);
+    $content = preg_replace('/```\s*(.*?)\s*```/s', '$1', $content);
+
+    return $content;
+}
+
+function build_fallback_description_html($text)
+{
+    $text = preg_replace('/<\/?p>/', '', $text);
     $text = trim($text);
-    
-    // Converte quebras de linha em <br> temporariamente
-    $text = str_replace(["\r\n", "\r", "\n"], "|||BR|||", $text);
-    
-    // Processa emojis e marcadores especiais
+    $text = str_replace(["
+
+", "
+", "
+"], "|||BR|||", $text);
+
     $html = '';
     $lines = explode("|||BR|||", $text);
     $inList = false;
-    
+
     foreach ($lines as $line) {
         $line = trim($line);
-        
+
         if (empty($line)) {
             if ($inList) {
                 $html .= '</ul>';
@@ -56,38 +133,29 @@ function format_description_html($text) {
             $html .= '<br>';
             continue;
         }
-        
-        // Detecta títulos com emojis (🏡, ✨, 🌟, 💰, etc)
-        if (preg_match('/^[🏡✨🌟💰🚗📄🎯🔑⭐🎉]/', $line)) {
+
+        if (preg_match('/^[🏡🔑🌟📍💎✨🏆🚪🎯📞📐📌🤩💡🛏🛁🚗🌳]/u', $line)) {
             if ($inList) {
                 $html .= '</ul>';
                 $inList = false;
             }
             $html .= '<h3>' . htmlspecialchars($line) . '</h3>';
-        }
-        // Detecta itens de lista (começa com -, *, •, ou emoji seguido de **)
-        elseif (preg_match('/^[\-\*•]/', $line) || preg_match('/^\*\*/', $line)) {
+        } elseif (preg_match('/^[\-\*✅]/', $line) || preg_match('/^\*\*/', $line)) {
             if (!$inList) {
                 $html .= '<ul>';
                 $inList = true;
             }
-            // Remove o marcador inicial
-            $item = preg_replace('/^[\-\*•]\s*/', '', $line);
-            // Converte **texto:** para <strong>texto:</strong> ANTES de escapar
+            $item = preg_replace('/^[\-\*✅]\s*/', '', $line);
             $item = preg_replace('/^\*\*([^:]+):\*\*/', '<strong>$1:</strong>', $item);
-            // Escapa o resto mas preserva as tags <strong>
             $item = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $item);
             $item = htmlspecialchars($item, ENT_NOQUOTES);
             $item = str_replace(['|||STRONG|||', '|||/STRONG|||'], ['<strong>', '</strong>'], $item);
             $html .= '<li>' . $item . '</li>';
-        }
-        // Linha normal
-        else {
+        } else {
             if ($inList) {
                 $html .= '</ul>';
                 $inList = false;
             }
-            // Detecta negrito **texto**
             $line = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $line);
             $line = str_replace(['<strong>', '</strong>'], ['|||STRONG|||', '|||/STRONG|||'], $line);
             $line = htmlspecialchars($line, ENT_NOQUOTES);
@@ -95,11 +163,11 @@ function format_description_html($text) {
             $html .= '<p>' . $line . '</p>';
         }
     }
-    
+
     if ($inList) {
         $html .= '</ul>';
     }
-    
+
     return $html;
 }
 
@@ -233,7 +301,8 @@ function geocode_via_cep($cep)
         'http' => [
             'timeout' => 5,
             'method' => 'GET',
-            'header' => "User-Agent: Exclusiva-Lar-Sync/3.0
+            'header' => "User-Agent: Exclusiva-Lar-Sync/3.0
+
 "
         ]
     ]);
