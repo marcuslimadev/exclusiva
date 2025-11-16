@@ -53,17 +53,6 @@
                   <i class="fas fa-th-large mr-2"></i>Grade
                 </button>
                 <button 
-                  @click="modoVisualizacao = 'mapa'"
-                  :class="[
-                    'px-4 py-2 rounded-lg font-semibold text-sm transition-all',
-                    modoVisualizacao === 'mapa' 
-                      ? 'bg-white text-purple-600 shadow-md' 
-                      : 'text-gray-600 hover:text-purple-600'
-                  ]"
-                >
-                  <i class="fas fa-map-marked-alt mr-2"></i>Mapa
-                </button>
-                <button 
                   @click="modoVisualizacao = 'split'"
                   :class="[
                     'px-4 py-2 rounded-lg font-semibold text-sm transition-all',
@@ -71,9 +60,9 @@
                       ? 'bg-white text-purple-600 shadow-md' 
                       : 'text-gray-600 hover:text-purple-600'
                   ]"
-                  title="Vista dividida: lista e mapa"
+                  title="Ver lista e mapa em tela cheia"
                 >
-                  <i class="fas fa-columns mr-2"></i>Dividido
+                  <i class="fas fa-map-marked-alt mr-2"></i>Ver Mapa
                 </button>
               </div>
             </div>
@@ -151,16 +140,22 @@
       </div>
     </div>
     
-    <!-- Map View -->
-    <section v-if="!loading && modoVisualizacao === 'mapa'" class="container mx-auto px-4 py-16">
-      <PropertyMap 
-        :imoveis="imoveisFiltrados"
-        @property-click="abrirModal"
-      />
-    </section>
-    
     <!-- Split View (List + Map) - Zillow Style -->
-    <section v-else-if="!loading && modoVisualizacao === 'split'" class="container-fluid px-0 py-0">
+    <section v-if="!loading && modoVisualizacao === 'split'" class="split-view-fullscreen">
+      <div class="split-toolbar">
+        <div class="split-toolbar-info">
+          <i class="fas fa-map-marked-alt text-purple-600"></i>
+          <span>Mapa interativo</span>
+          <span class="text-gray-400">•</span>
+          <span>{{ imoveisFiltrados.length }} resultados</span>
+        </div>
+        <button 
+          class="split-toolbar-close"
+          @click="modoVisualizacao = 'grid'"
+        >
+          <i class="fas fa-times mr-2"></i>Fechar mapa
+        </button>
+      </div>
       <div class="split-view-container">
         <!-- Properties List (Left Side) -->
         <div class="split-view-list">
@@ -343,211 +338,195 @@
     <transition name="fade">
       <div 
         v-if="modalAberto" 
-        class="modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center p-4"
+        class="modal-backdrop fixed inset-0 z-[9999] overflow-y-auto p-4"
         @click.self="fecharModal"
       >
-        <div class="zoom-in bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-          <div class="relative flex-shrink-0">
-            <!-- Close Button -->
-            <button 
-              @click="fecharModal"
-              class="absolute top-4 right-4 z-10 bg-white/90 backdrop-blur-sm w-12 h-12 rounded-full flex items-center justify-center hover:bg-white transition shadow-lg"
-            >
-              <i class="fas fa-times text-2xl text-gray-700"></i>
-            </button>
-            
-            <!-- Image Slideshow -->
-            <div class="relative h-96 bg-gray-200">
-              <!-- Slideshow Container -->
-              <div 
-                v-if="imovelSelecionado.imagens && imovelSelecionado.imagens.length > 0"
-                class="relative h-full overflow-hidden"
+        <div class="max-w-6xl mx-auto">
+          <div class="zoom-in bg-white rounded-3xl w-full shadow-2xl flex flex-col md:flex-row overflow-hidden">
+            <div class="relative md:w-1/2 w-full bg-gray-200">
+              <button 
+                @click="fecharModal"
+                class="absolute top-4 right-4 z-10 bg-white/90 backdrop-blur-sm w-10 h-10 rounded-full flex items-center justify-center hover:bg-white transition shadow-lg"
               >
+                <i class="fas fa-times text-xl text-gray-700"></i>
+              </button>
+              
+              <div class="modal-gallery h-72 sm:h-80 md:h-[80vh]">
                 <div 
-                  v-for="(imagem, index) in imovelSelecionado.imagens" 
-                  :key="index"
-                  :class="{'opacity-100': slideshowAtual === index, 'opacity-0': slideshowAtual !== index}"
-                  class="absolute inset-0 transition-opacity duration-500"
+                  v-if="imovelSelecionado.imagens && imovelSelecionado.imagens.length > 0"
+                  class="relative h-full overflow-hidden"
                 >
-                  <img 
-                    :src="imagem.url || 'https://via.placeholder.com/800x600?text=Imóvel'" 
-                    :alt="`${imovelSelecionado.tipo_imovel} - Imagem ${index + 1}`"
-                    class="w-full h-full object-cover"
-                  >
-                </div>
-                
-                <!-- Navigation Arrows -->
-                <button 
-                  v-if="imovelSelecionado.imagens.length > 1"
-                  @click="navegarSlideshow('prev')"
-                  class="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-12 h-12 rounded-full flex items-center justify-center transition z-10"
-                >
-                  <i class="fas fa-chevron-left"></i>
-                </button>
-                
-                <button 
-                  v-if="imovelSelecionado.imagens.length > 1"
-                  @click="navegarSlideshow('next')"
-                  class="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-12 h-12 rounded-full flex items-center justify-center transition z-10"
-                >
-                  <i class="fas fa-chevron-right"></i>
-                </button>
-                
-                <!-- Image Indicators -->
-                <div 
-                  v-if="imovelSelecionado.imagens.length > 1"
-                  class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2"
-                >
-                  <button
-                    v-for="(imagem, index) in imovelSelecionado.imagens"
+                  <div 
+                    v-for="(imagem, index) in imovelSelecionado.imagens" 
                     :key="index"
-                    @click="slideshowAtual = index"
-                    :class="{
-                      'bg-white': slideshowAtual === index,
-                      'bg-white/50': slideshowAtual !== index
-                    }"
-                    class="w-3 h-3 rounded-full transition"
-                  ></button>
+                    :class="{'opacity-100': slideshowAtual === index, 'opacity-0': slideshowAtual !== index}"
+                    class="absolute inset-0 transition-opacity duration-500"
+                  >
+                    <img 
+                      :src="imagem.url || 'https://via.placeholder.com/800x600?text=Imóvel'" 
+                      :alt="`${imovelSelecionado.tipo_imovel} - Imagem ${index + 1}`"
+                      class="w-full h-full object-cover"
+                    >
+                  </div>
+                  
+                  <button 
+                    v-if="imovelSelecionado.imagens.length > 1"
+                    @click="navegarSlideshow('prev')"
+                    class="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition z-10"
+                  >
+                    <i class="fas fa-chevron-left"></i>
+                  </button>
+                  
+                  <button 
+                    v-if="imovelSelecionado.imagens.length > 1"
+                    @click="navegarSlideshow('next')"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 rounded-full flex items-center justify-center transition z-10"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                  </button>
+                  
+                  <div 
+                    v-if="imovelSelecionado.imagens.length > 1"
+                    class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2"
+                  >
+                    <button
+                      v-for="(imagem, index) in imovelSelecionado.imagens"
+                      :key="index"
+                      @click="slideshowAtual = index"
+                      :class="{
+                        'bg-white': slideshowAtual === index,
+                        'bg-white/50': slideshowAtual !== index
+                      }"
+                      class="w-2.5 h-2.5 rounded-full transition"
+                    ></button>
+                  </div>
+                  
+                  <div 
+                    v-if="imovelSelecionado.imagens.length > 1"
+                    class="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded-full text-xs font-medium"
+                  >
+                    {{ slideshowAtual + 1 }} / {{ imovelSelecionado.imagens.length }}
+                  </div>
                 </div>
                 
-                <!-- Image Counter -->
-                <div 
-                  v-if="imovelSelecionado.imagens.length > 1"
-                  class="absolute top-4 right-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium"
+                <img 
+                  v-else
+                  :src="imovelSelecionado.imagem_destaque || 'https://via.placeholder.com/800x600?text=Imóvel'" 
+                  :alt="imovelSelecionado.tipo_imovel"
+                  class="w-full h-full object-cover"
                 >
-                  {{ slideshowAtual + 1 }} / {{ imovelSelecionado.imagens.length }}
-                </div>
               </div>
               
-              <!-- Fallback Single Image -->
-              <img 
-                v-else
-                :src="imovelSelecionado.imagem_destaque || 'https://via.placeholder.com/800x600?text=Imóvel'" 
-                :alt="imovelSelecionado.tipo_imovel"
-                class="w-full h-full object-cover"
-              >
-              
               <div class="absolute top-4 left-4 flex flex-wrap gap-2">
-                <span v-if="imovelSelecionado.exclusividade" class="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full text-sm font-bold">
-                  ⭐ EXCLUSIVO
+                <span v-if="imovelSelecionado.exclusividade" class="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full text-xs font-bold">
+                  EXCLUSIVO
                 </span>
-                <span class="bg-white/90 backdrop-blur-sm text-gray-800 px-4 py-2 rounded-full text-sm font-semibold">
+                <span class="bg-white/90 backdrop-blur-sm text-gray-800 px-4 py-2 rounded-full text-xs font-semibold">
                   {{ imovelSelecionado.tipo_imovel }}
                 </span>
               </div>
             </div>
             
-            <!-- Content -->
-            <div class="p-8 overflow-y-auto flex-1 min-h-0">
-              <!-- Header -->
-              <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                <hgroup>
-                  <h2 class="text-3xl font-bold text-gray-800 mb-2">
-                    {{ imovelSelecionado.tipo_imovel }}
-                  </h2>
-                  <address class="text-gray-600 flex items-center gap-2 not-italic">
-                    <i class="fas fa-map-marker-alt text-purple-500" aria-hidden="true"></i>
-                    {{ imovelSelecionado.bairro }}, {{ imovelSelecionado.cidade }} - {{ imovelSelecionado.estado }}
-                  </address>
-                </hgroup>
-                <div class="price-tag text-white px-6 py-3 rounded-full font-bold text-2xl shadow-lg mt-4 md:mt-0" role="text" aria-label="Preço do imóvel">
-                  {{ formatarPreco(imovelSelecionado.valor_venda) }}
-                </div>
-              </header>
-              
-              <!-- Features Grid -->
-              <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" aria-label="Características do imóvel">
-                <article v-if="imovelSelecionado.dormitorios" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
-                  <i class="fas fa-bed text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
-                  <data :value="imovelSelecionado.dormitorios" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.dormitorios }}</data>
-                  <p class="text-sm text-gray-600">Quartos</p>
-                </article>
-                <article v-if="imovelSelecionado.suites" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
-                  <i class="fas fa-bath text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
-                  <data :value="imovelSelecionado.suites" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.suites }}</data>
-                  <p class="text-sm text-gray-600">Suítes</p>
-                </article>
-                <article v-if="imovelSelecionado.garagem" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
-                  <i class="fas fa-car text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
-                  <data :value="imovelSelecionado.garagem" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.garagem }}</data>
-                  <p class="text-sm text-gray-600">Vagas</p>
-                </article>
-                <article v-if="imovelSelecionado.area_total" class="bg-purple-50 rounded-xl p-4 text-center feature-card">
-                  <i class="fas fa-ruler-combined text-3xl text-purple-500 mb-2" aria-hidden="true"></i>
-                  <data :value="imovelSelecionado.area_total" class="text-2xl font-bold text-gray-800 block">{{ imovelSelecionado.area_total }}</data>
-                  <p class="text-sm text-gray-600">m²</p>
-                </article>
-              </section>
-              
-              <!-- Description -->
-              <section v-if="imovelSelecionado.descricao" class="mb-6" aria-labelledby="descricao-titulo">
-                <h3 id="descricao-titulo" class="text-xl font-bold text-gray-800 mb-3">
-                  <i class="fas fa-info-circle mr-2" aria-hidden="true"></i>Descrição
-                </h3>
-                <article class="bg-gray-50 rounded-xl p-6 prose max-w-none">
-                  <div 
-                    class="text-gray-700 leading-relaxed text-justify description-content"
-                    v-html="sanitizeAndFormatHTML(imovelSelecionado.descricao)"
-                  ></div>
-                </article>
-              </section>
-              
-              <!-- Additional Info -->
-              <section class="grid md:grid-cols-2 gap-4 mb-6" aria-label="Informações adicionais">
-                <article v-if="imovelSelecionado.valor_condominio" class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border border-blue-200">
-                  <header class="flex items-center gap-2 mb-2">
-                    <i class="fas fa-building text-blue-600" aria-hidden="true"></i>
-                    <h4 class="text-sm font-semibold text-blue-800">Condomínio</h4>
-                  </header>
-                  <data :value="imovelSelecionado.valor_condominio" class="text-lg font-bold text-gray-800">
-                    {{ formatarPreco(imovelSelecionado.valor_condominio) }}
-                  </data>
-                </article>
-                <article v-if="imovelSelecionado.valor_iptu" class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 border border-green-200">
-                  <header class="flex items-center gap-2 mb-2">
-                    <i class="fas fa-file-invoice-dollar text-green-600" aria-hidden="true"></i>
-                    <h4 class="text-sm font-semibold text-green-800">IPTU</h4>
-                  </header>
-                  <data :value="imovelSelecionado.valor_iptu" class="text-lg font-bold text-gray-800">
-                    {{ formatarPreco(imovelSelecionado.valor_iptu) }}
-                  </data>
-                </article>
-                <article v-if="imovelSelecionado.area_privativa" class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-5 border border-purple-200">
-                  <header class="flex items-center gap-2 mb-2">
-                    <i class="fas fa-home text-purple-600" aria-hidden="true"></i>
-                    <h4 class="text-sm font-semibold text-purple-800">Área Privativa</h4>
-                  </header>
-                  <data :value="imovelSelecionado.area_privativa" class="text-lg font-bold text-gray-800">
-                    {{ imovelSelecionado.area_privativa }} m²
-                  </data>
-                </article>
-                <article v-if="imovelSelecionado.ano_construcao" class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-5 border border-orange-200">
-                  <header class="flex items-center gap-2 mb-2">
-                    <i class="fas fa-calendar-alt text-orange-600" aria-hidden="true"></i>
-                    <h4 class="text-sm font-semibold text-orange-800">Ano de Construção</h4>
-                  </header>
-                  <time :datetime="imovelSelecionado.ano_construcao" class="text-lg font-bold text-gray-800">
-                    {{ imovelSelecionado.ano_construcao }}
-                  </time>
-                </article>
-              </section>
-              
-              <!-- WhatsApp CTA -->
-              <footer>
-                <button 
-                  @click="abrirWhatsApp(imovelSelecionado)"
-                  class="whatsapp-button w-full text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 shadow-lg"
-                  aria-label="Entrar em contato via WhatsApp sobre este imóvel"
-                >
-                  <i class="fab fa-whatsapp text-3xl" aria-hidden="true"></i>
-                  <span>Falar com um Corretor sobre este Imóvel</span>
-                </button>
+            <div class="md:w-1/2 w-full flex flex-col bg-white">
+              <div class="p-6 sm:p-8 flex-1 overflow-y-auto max-h-[80vh]">
+                <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                  <hgroup>
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                      {{ imovelSelecionado.tipo_imovel }}
+                    </h2>
+                    <p class="text-gray-500 flex items-center gap-2">
+                      <i class="fas fa-map-marker-alt text-purple-500"></i>
+                      {{ imovelSelecionado.bairro }}, {{ imovelSelecionado.cidade }} - {{ imovelSelecionado.estado }}
+                    </p>
+                  </hgroup>
+                  <div class="text-right mt-4 md:mt-0">
+                    <p class="text-3xl font-bold text-purple-600">
+                      {{ formatarPreco(imovelSelecionado.valor_venda || imovelSelecionado.valor_aluguel) }}
+                    </p>
+                    <p v-if="imovelSelecionado.valor_aluguel" class="text-sm text-gray-500">
+                      (Aluguel)
+                    </p>
+                  </div>
+                </header>
                 
-                <p class="text-center text-sm text-gray-500 mt-4">
-                  <span class="font-semibold">Referência:</span> 
-                  <code class="bg-gray-100 px-2 py-1 rounded">{{ imovelSelecionado.referencia_imovel || imovelSelecionado.codigo_imovel }}</code>
-                </p>
-              </footer>
+                <section class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                  <div v-if="imovelSelecionado.dormitorios" class="feature-card bg-gray-100 rounded-2xl p-4 text-center">
+                    <i class="fas fa-bed text-purple-500 text-xl mb-2"></i>
+                    <p class="font-bold text-gray-800">{{ imovelSelecionado.dormitorios }}</p>
+                    <p class="text-xs text-gray-500">Quartos</p>
+                  </div>
+                  <div v-if="imovelSelecionado.suites" class="feature-card bg-gray-100 rounded-2xl p-4 text-center">
+                    <i class="fas fa-bath text-purple-500 text-xl mb-2"></i>
+                    <p class="font-bold text-gray-800">{{ imovelSelecionado.suites }}</p>
+                    <p class="text-xs text-gray-500">Suítes</p>
+                  </div>
+                  <div v-if="imovelSelecionado.garagem" class="feature-card bg-gray-100 rounded-2xl p-4 text-center">
+                    <i class="fas fa-car text-purple-500 text-xl mb-2"></i>
+                    <p class="font-bold text-gray-800">{{ imovelSelecionado.garagem }}</p>
+                    <p class="text-xs text-gray-500">Vagas</p>
+                  </div>
+                  <div v-if="imovelSelecionado.area_total" class="feature-card bg-gray-100 rounded-2xl p-4 text-center">
+                    <i class="fas fa-ruler-combined text-purple-500 text-xl mb-2"></i>
+                    <p class="font-bold text-gray-800">{{ imovelSelecionado.area_total }} m²</p>
+                    <p class="text-xs text-gray-500">Área total</p>
+                  </div>
+                </section>
+                
+                <section class="mb-6">
+                  <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <i class="fas fa-info-circle text-purple-500"></i>
+                    Detalhes do imóvel
+                  </h3>
+                  <div class="prose prose-sm text-gray-600 description-content" v-html="sanitizeAndFormatHTML(imovelSelecionado.descricao)"></div>
+                </section>
+                
+                <section v-if="imovelSelecionado.caracteristicas && imovelSelecionado.caracteristicas.length > 0" class="mb-6">
+                  <h3 class="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <i class="fas fa-star text-purple-500"></i>
+                    Características
+                  </h3>
+                  <div class="flex flex-wrap gap-2">
+                    <span 
+                      v-for="(carac, index) in imovelSelecionado.caracteristicas"
+                      :key="index"
+                      class="px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-sm"
+                    >
+                      {{ carac }}
+                    </span>
+                  </div>
+                </section>
+                
+                <footer class="space-y-4">
+                  <div class="bg-gray-100 rounded-2xl p-4 flex items-center gap-3">
+                    <i class="fas fa-map-pin text-purple-500 text-xl"></i>
+                    <div>
+                      <p class="font-semibold text-gray-800">Localização</p>
+                      <p class="text-sm text-gray-500">
+                        {{ imovelSelecionado.logradouro || 'Endereço sob consulta' }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="bg-purple-50 rounded-2xl p-4 flex items-center gap-3">
+                    <i class="fas fa-id-card text-purple-500 text-xl"></i>
+                    <div>
+                      <p class="font-semibold text-gray-800">Referência</p>
+                      <p class="text-sm text-gray-500">
+                        {{ imovelSelecionado.referencia_imovel || imovelSelecionado.codigo_imovel }}
+                      </p>
+                    </div>
+                  </div>
+                </footer>
+              </div>
+              
+              <div class="p-6 sm:p-8 border-t border-gray-100 bg-white">
+                <button 
+                  @click.stop="abrirWhatsApp(imovelSelecionado)"
+                  class="whatsapp-button w-full text-white py-3 rounded-2xl font-semibold flex items-center justify-center gap-2 text-lg"
+                >
+                  <i class="fab fa-whatsapp text-xl"></i>
+                  Tenho Interesse
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -566,7 +545,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import api from '../services/api'
 import PropertyMap from '../components/PropertyMap.vue'
 
@@ -887,6 +866,14 @@ const unhighlightMarker = () => {
 onMounted(() => {
   carregarImoveis()
 })
+
+watch(modoVisualizacao, (novo) => {
+  document.body.style.overflow = novo === 'split' ? 'hidden' : 'auto'
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = 'auto'
+})
 </script>
 
 <style scoped>
@@ -1064,7 +1051,7 @@ onMounted(() => {
 /* Split View Styles */
 .split-view-container {
   display: flex;
-  height: calc(100vh - 80px);
+  height: 100%;
   position: relative;
   z-index: 1;
 }
@@ -1121,18 +1108,100 @@ onMounted(() => {
 @media (max-width: 768px) {
   .split-view-container {
     flex-direction: column;
-    height: auto;
+    height: 100%;
   }
   
   .split-view-list {
     flex: none;
     max-width: 100%;
-    max-height: 50vh;
+    max-height: 45vh;
   }
   
   .split-view-map {
-    height: 50vh;
+    height: 55vh;
   }
 }
 
+.split-view-fullscreen {
+  position: fixed;
+  inset: 0;
+  background: #f9fafb;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.split-view-fullscreen .split-view-container {
+  flex: 1;
+  padding: 0;
+  height: 100%;
+}
+
+.split-toolbar {
+  background: #ffffff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  z-index: 70;
+}
+
+.split-toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.split-toolbar-close {
+  background: #f3f4f6;
+  border: none;
+  color: #111827;
+  padding: 0.5rem 1.25rem;
+  border-radius: 999px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.split-toolbar-close:hover {
+  background: #e5e7eb;
+  color: #4c1d95;
+}
+
+.split-view-fullscreen .split-view-list {
+  flex: 0 0 40%;
+  max-width: 520px;
+}
+
+.split-view-fullscreen .split-view-map {
+  flex: 1;
+}
+
+.split-view-fullscreen #properties-map,
+.split-view-fullscreen .map-view {
+  border-radius: 0;
+}
+
+@media (max-width: 768px) {
+  .split-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .split-toolbar-close {
+    width: 100%;
+  }
+  
+  .split-view-fullscreen .split-view-list {
+    max-width: 100%;
+  }
+}
 </style>

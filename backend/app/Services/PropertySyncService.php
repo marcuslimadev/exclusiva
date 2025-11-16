@@ -13,6 +13,8 @@ class PropertySyncService
 {
     private $apiToken;
     private $baseUrl = 'https://www.exclusivalarimoveis.com.br/api/v1/app/imovel';
+    private $geocodeCache = [];
+    private $lastGeocodeCall = 0;
     
     public function __construct()
     {
@@ -219,6 +221,16 @@ class PropertySyncService
                 }
             }
         }
+
+        $latitude = $imovel['endereco']['latitude'] ?? null;
+        $longitude = $imovel['endereco']['longitude'] ?? null;
+
+        if (empty($latitude) || empty($longitude)) {
+            [$latitude, $longitude] = $this->resolveCoordinates($imovel);
+        }
+
+        $latitude = ($latitude === null || $latitude === '') ? null : (float) $latitude;
+        $longitude = ($longitude === null || $longitude === '') ? null : (float) $longitude;
         
         return [
             'codigo_imovel' => $imovel['codigoImovel'],
@@ -240,6 +252,8 @@ class PropertySyncService
             'numero' => $imovel['endereco']['numero'] ?? null,
             'complemento' => $imovel['endereco']['complemento'] ?? null,
             'cep' => $imovel['endereco']['cep'] ?? null,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
             'area_privativa' => $areaPrivativa,
             'area_total' => $areaTotal,
             'area_terreno' => $areaTerreno,
@@ -279,6 +293,198 @@ class PropertySyncService
         
         // Se não tiver destaque, pega a primeira
         return $imagens[0]['url'] ?? null;
+    }
+
+    private function resolveCoordinates(array $imovel)
+    {
+        $endereco = $imovel['endereco'] ?? [];
+        $logradouro = trim($endereco['logradouro'] ?? '');
+        $numero = trim($endereco['numero'] ?? '');
+        $bairro = trim($endereco['bairro'] ?? '');
+        $cidade = trim($endereco['cidade'] ?? '');
+        $estado = strtoupper(trim($endereco['estado'] ?? ''));
+        $cep = preg_replace('/\D/', '', $endereco['cep'] ?? '');
+
+        if (empty($cidade)) {
+            $cidade = 'Belo Horizonte';
+            $estado = $estado ?: 'MG';
+        }
+
+        $cacheKey = md5(json_encode([$logradouro, $numero, $bairro, $cidade, $estado, $cep]));
+        if (isset($this->geocodeCache[$cacheKey])) {
+            return $this->geocodeCache[$cacheKey];
+        }
+
+        if (empty($bairro) && empty($logradouro) && empty($cidade)) {
+            return $this->geocodeCache[$cacheKey] = [null, null];
+        }
+
+        if ($cep) {
+            $coords = $this->geocodeViaCep($cep);
+            if ($this->validCoordinates($coords[0], $coords[1])) {
+                return $this->geocodeCache[$cacheKey] = $coords;
+            }
+        }
+
+        $queries = [];
+        if ($logradouro && $numero) {
+            $queries[] = "{$logradouro}, {$numero}, {$bairro}, {$cidade}, {$estado}, Brasil";
+        }
+        if ($logradouro) {
+            $queries[] = "{$logradouro}, {$bairro}, {$cidade}, {$estado}, Brasil";
+        }
+        if ($bairro) {
+            $queries[] = "{$bairro}, {$cidade}, {$estado}, Brasil";
+        }
+        $queries[] = "{$cidade}, {$estado}, Brasil";
+
+        foreach ($queries as $query) {
+            $coords = $this->searchNominatim($query);
+            if ($this->validCoordinates($coords[0], $coords[1])) {
+                return $this->geocodeCache[$cacheKey] = $coords;
+            }
+        }
+
+        if ($estado) {
+            $coords = $this->getStateCoordinates($estado);
+            if ($this->validCoordinates($coords[0], $coords[1])) {
+                return $this->geocodeCache[$cacheKey] = $coords;
+            }
+        }
+
+        return $this->geocodeCache[$cacheKey] = [null, null];
+    }
+
+    private function geocodeViaCep($cep)
+    {
+        $cep = preg_replace('/\D/', '', $cep);
+        if (strlen($cep) !== 8) {
+            return [null, null];
+        }
+
+        $url = "https://viacep.com.br/ws/{$cep}/json/";
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 5,
+                'method' => 'GET',
+                'header' => "User-Agent: PropertySync/1.0\r\n"
+            ]
+        ]);
+
+        $resp = @file_get_contents($url, false, $context);
+        if ($resp === false) {
+            return [null, null];
+        }
+
+        $data = json_decode($resp, true);
+        if (empty($data) || !empty($data['erro'])) {
+            return [null, null];
+        }
+
+        $parts = array_filter([
+            $data['logradouro'] ?? null,
+            $data['bairro'] ?? null,
+            ($data['localidade'] ?? '') . ' - ' . ($data['uf'] ?? ''),
+            'Brasil'
+        ]);
+
+        if (empty($parts)) {
+            return [null, null];
+        }
+
+        $query = implode(', ', $parts);
+        return $this->searchNominatim($query);
+    }
+
+    private function searchNominatim($query)
+    {
+        if ($this->lastGeocodeCall > 0) {
+            $elapsed = microtime(true) - $this->lastGeocodeCall;
+            if ($elapsed < 1.1) {
+                usleep((int)((1.1 - $elapsed) * 1000000));
+            }
+        }
+
+        $url = 'https://nominatim.openstreetmap.org/search?' . http_build_query([
+            'q' => $query,
+            'format' => 'json',
+            'limit' => 1,
+            'addressdetails' => 1,
+            'countrycodes' => 'br'
+        ]);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_HTTPHEADER => [
+                'User-Agent: PropertySync/1.0 (contato@exclusivalarimoveis.com.br)'
+            ]
+        ]);
+
+        $resp = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $this->lastGeocodeCall = microtime(true);
+
+        if ($httpCode !== 200 || $resp === false) {
+            return [null, null];
+        }
+
+        $data = json_decode($resp, true);
+        if (is_array($data) && count($data) > 0) {
+            $lat = isset($data[0]['lat']) ? (float) $data[0]['lat'] : null;
+            $lng = isset($data[0]['lon']) ? (float) $data[0]['lon'] : null;
+            return [$lat, $lng];
+        }
+
+        return [null, null];
+    }
+
+    private function validCoordinates($lat, $lng)
+    {
+        if ($lat === null || $lng === null) {
+            return false;
+        }
+
+        return $lat >= -33.75 && $lat <= 5.27 && $lng >= -73.99 && $lng <= -28.84;
+    }
+
+    private function getStateCoordinates($estado)
+    {
+        $coords = [
+            'AC' => [-9.0238, -70.8120],
+            'AL' => [-9.5713, -36.7820],
+            'AP' => [1.4061, -51.6022],
+            'AM' => [-3.4168, -65.8561],
+            'BA' => [-12.5797, -41.7007],
+            'CE' => [-5.4984, -39.3206],
+            'DF' => [-15.7998, -47.8645],
+            'ES' => [-19.1834, -40.3089],
+            'GO' => [-15.8270, -49.8362],
+            'MA' => [-4.9609, -45.2744],
+            'MT' => [-12.6819, -56.9211],
+            'MS' => [-20.7722, -54.7852],
+            'MG' => [-19.9167, -43.9345],
+            'PA' => [-3.7970, -52.4751],
+            'PB' => [-7.2399, -36.7819],
+            'PR' => [-24.8940, -51.5555],
+            'PE' => [-8.8137, -36.9541],
+            'PI' => [-6.6000, -42.2800],
+            'RJ' => [-22.9068, -43.1729],
+            'RN' => [-5.4026, -36.9541],
+            'RS' => [-30.0346, -51.2177],
+            'RO' => [-10.9472, -62.8278],
+            'RR' => [1.3227, -60.6522],
+            'SC' => [-27.2423, -50.2189],
+            'SP' => [-23.5505, -46.6333],
+            'SE' => [-10.5741, -37.3857],
+            'TO' => [-10.1753, -48.2982],
+        ];
+
+        $estado = strtoupper($estado);
+        return $coords[$estado] ?? [null, null];
     }
     
     /**

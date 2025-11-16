@@ -144,64 +144,137 @@ function call_api_get($url)
 
 // ============== GEOCODIFICAÇÃO NOMINATIM ==============
 
-function geocode_address($endereco)
+function geocode_address($endereco, $codigo = null)
 {
-    // Montar query de busca
+    static $geocode_cache = [];
+    
     $logradouro = trim($endereco['logradouro'] ?? '');
     $numero = trim($endereco['numero'] ?? '');
     $bairro = trim($endereco['bairro'] ?? '');
     $cidade = trim($endereco['cidade'] ?? '');
-    $estado = trim($endereco['estado'] ?? '');
+    $estado = strtoupper(trim($endereco['estado'] ?? ''));
+    $cep = preg_replace('/\\D/', '', $endereco['cep'] ?? '');
     
-    // Se cidade está vazia, assumir Belo Horizonte/MG (base da Exclusiva Lar)
     if (empty($cidade)) {
         $cidade = 'Belo Horizonte';
-        $estado = 'MG';
+        $estado = $estado ?: 'MG';
     }
     
-    // Se não tem endereço mínimo, retorna null
-    if (empty($bairro) && empty($logradouro)) {
-        return ['lat' => null, 'lng' => null];
+    $cacheKey = md5(json_encode([$logradouro, $numero, $bairro, $cidade, $estado, $cep]));
+    if (isset($geocode_cache[$cacheKey])) {
+        return $geocode_cache[$cacheKey];
     }
     
-    // Construir query de busca (do mais específico para o mais geral)
+    if (empty($bairro) && empty($logradouro) && empty($cidade)) {
+        $geocode_cache[$cacheKey] = ['lat' => null, 'lng' => null];
+        return $geocode_cache[$cacheKey];
+    }
+    
+    echo "   [INFO] Geocodificando imovel " . ($codigo ?? 'N/A') . "...
+";
+    
+    if (!empty($cep)) {
+        $coords = geocode_via_cep($cep);
+        if ($coords['lat'] && $coords['lng']) {
+            echo "   [OK] Coordenadas via ViaCEP: {$coords['lat']}, {$coords['lng']}
+";
+            $geocode_cache[$cacheKey] = $coords;
+            return $coords;
+        }
+    }
+    
     $queries = [];
-    
-    // Tentar com endereço completo
     if ($logradouro && $numero) {
         $queries[] = "{$logradouro}, {$numero}, {$bairro}, {$cidade}, {$estado}, Brasil";
     }
-    
-    // Tentar sem número
-    if ($logradouro && $bairro) {
+    if ($logradouro) {
         $queries[] = "{$logradouro}, {$bairro}, {$cidade}, {$estado}, Brasil";
     }
-    
-    // Tentar apenas bairro + cidade
     if ($bairro) {
         $queries[] = "{$bairro}, {$cidade}, {$estado}, Brasil";
     }
-    
-    // Tentar apenas cidade
     $queries[] = "{$cidade}, {$estado}, Brasil";
     
     foreach ($queries as $query) {
         $coords = nominatim_search($query);
         if ($coords['lat'] && $coords['lng']) {
-            echo "   🗺️  Geocodificado: {$query} → {$coords['lat']}, {$coords['lng']}\n";
+            echo "   [OK] Geocodificado: {$query} -> {$coords['lat']}, {$coords['lng']}
+";
+            $geocode_cache[$cacheKey] = $coords;
             return $coords;
         }
-        
-        // Rate limiting: Nominatim exige 1 segundo entre requests
-        usleep(1100000); // 1.1 segundos
     }
     
-    echo "   ⚠️  Não foi possível geocodificar: {$bairro}, {$cidade}, {$estado}\n";
-    return ['lat' => null, 'lng' => null];
+    if ($estado) {
+        $coords = get_state_coordinates($estado);
+        if ($coords['lat'] && $coords['lng']) {
+            echo "   [WARN] Coordenadas aproximadas do estado {$estado}: {$coords['lat']}, {$coords['lng']}
+";
+            $geocode_cache[$cacheKey] = $coords;
+            return $coords;
+        }
+    }
+    
+    echo "   [WARN] Nao foi possivel geocodificar: {$bairro}, {$cidade}, {$estado}
+";
+    $geocode_cache[$cacheKey] = ['lat' => null, 'lng' => null];
+    return $geocode_cache[$cacheKey];
+}
+
+function geocode_via_cep($cep)
+{
+    $cep = preg_replace('/\\D/', '', $cep);
+    if (strlen($cep) !== 8) {
+        return ['lat' => null, 'lng' => null];
+    }
+    
+    $url = "https://viacep.com.br/ws/{$cep}/json/";
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 5,
+            'method' => 'GET',
+            'header' => "User-Agent: Exclusiva-Lar-Sync/3.0
+"
+        ]
+    ]);
+    
+    $resp = @file_get_contents($url, false, $context);
+    if ($resp === false) {
+        return ['lat' => null, 'lng' => null];
+    }
+    
+    $data = json_decode($resp, true);
+    if (empty($data) || !empty($data['erro'])) {
+        return ['lat' => null, 'lng' => null];
+    }
+    
+    $parts = array_filter([
+        $data['logradouro'] ?? null,
+        $data['bairro'] ?? null,
+        ($data['localidade'] ?? '') . ' - ' . ($data['uf'] ?? ''),
+        'Brasil'
+    ]);
+    
+    if (empty($parts)) {
+        return ['lat' => null, 'lng' => null];
+    }
+    
+    $query = implode(', ', $parts);
+    return nominatim_search($query);
 }
 
 function nominatim_search($query)
 {
+    static $lastCall = 0;
+    
+    $now = microtime(true);
+    if ($lastCall > 0) {
+        $elapsed = $now - $lastCall;
+        if ($elapsed < 1.1) {
+            usleep((int)((1.1 - $elapsed) * 1000000));
+        }
+    }
+    
     $url = 'https://nominatim.openstreetmap.org/search?' . http_build_query([
         'q' => $query,
         'format' => 'json',
@@ -223,6 +296,7 @@ function nominatim_search($query)
     $resp = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+    $lastCall = microtime(true);
     
     if ($httpCode !== 200) {
         return ['lat' => null, 'lng' => null];
@@ -232,13 +306,50 @@ function nominatim_search($query)
     
     if (is_array($data) && count($data) > 0) {
         return [
-            'lat' => $data[0]['lat'] ?? null,
-            'lng' => $data[0]['lon'] ?? null
+            'lat' => isset($data[0]['lat']) ? (float)$data[0]['lat'] : null,
+            'lng' => isset($data[0]['lon']) ? (float)$data[0]['lon'] : null
         ];
     }
     
     return ['lat' => null, 'lng' => null];
 }
+
+function get_state_coordinates($estado)
+{
+    $coords = [
+        'AC' => ['lat' => -9.0238, 'lng' => -70.8120],
+        'AL' => ['lat' => -9.5713, 'lng' => -36.7820],
+        'AP' => ['lat' => 1.4061, 'lng' => -51.6022],
+        'AM' => ['lat' => -3.4168, 'lng' => -65.8561],
+        'BA' => ['lat' => -12.5797, 'lng' => -41.7007],
+        'CE' => ['lat' => -5.4984, 'lng' => -39.3206],
+        'DF' => ['lat' => -15.7998, 'lng' => -47.8645],
+        'ES' => ['lat' => -19.1834, 'lng' => -40.3089],
+        'GO' => ['lat' => -15.8270, 'lng' => -49.8362],
+        'MA' => ['lat' => -4.9609, 'lng' => -45.2744],
+        'MT' => ['lat' => -12.6819, 'lng' => -56.9211],
+        'MS' => ['lat' => -20.7722, 'lng' => -54.7852],
+        'MG' => ['lat' => -19.9167, 'lng' => -43.9345],
+        'PA' => ['lat' => -3.7970, 'lng' => -52.4751],
+        'PB' => ['lat' => -7.2399, 'lng' => -36.7819],
+        'PR' => ['lat' => -24.8940, 'lng' => -51.5555],
+        'PE' => ['lat' => -8.8137, 'lng' => -36.9541],
+        'PI' => ['lat' => -6.6000, 'lng' => -42.2800],
+        'RJ' => ['lat' => -22.9068, 'lng' => -43.1729],
+        'RN' => ['lat' => -5.4026, 'lng' => -36.9541],
+        'RS' => ['lat' => -30.0346, 'lng' => -51.2177],
+        'RO' => ['lat' => -10.9472, 'lng' => -62.8278],
+        'RR' => ['lat' => 1.3227, 'lng' => -60.6522],
+        'SC' => ['lat' => -27.2423, 'lng' => -50.2189],
+        'SP' => ['lat' => -23.5505, 'lng' => -46.6333],
+        'SE' => ['lat' => -10.5741, 'lng' => -37.3857],
+        'TO' => ['lat' => -10.1753, 'lng' => -48.2982],
+    ];
+    
+    $estado = strtoupper($estado);
+    return $coords[$estado] ?? ['lat' => null, 'lng' => null];
+}
+
 
 // ============== FASE 1: SALVAR LISTA COMPLETA ==============
 
@@ -432,7 +543,7 @@ function upsert_detalhes($d)
     
     // Se não tem coordenadas, tentar geocodificar pelo endereço
     if (empty($latitude) || empty($longitude)) {
-        $coords = geocode_address($d['endereco'] ?? []);
+        $coords = geocode_address($d['endereco'] ?? [], $codigo);
         $latitude = $coords['lat'];
         $longitude = $coords['lng'];
     }
